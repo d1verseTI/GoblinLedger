@@ -1,0 +1,13 @@
+# OS / editor junk
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.bak
+*.tmp
+
+# Third-party data synced locally from FojjiCore_Professions - not ours to redistribute.
+# Regenerate with: python tools/sync_fojji.py
+Data/FojjiData.lua
+__pycache__/
