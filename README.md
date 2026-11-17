@@ -44,3 +44,8 @@ This writes `Data/FojjiData.lua`, which is git-ignored. Without it, CraftProfit 
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+## Contact
+
+- Bugs and feature requests: open an issue on this repository.
+- Anything else, including work enquiries: [d1verseti.gg@gmail.com](mailto:d1verseti.gg@gmail.com)
