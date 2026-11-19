@@ -1,4 +1,4 @@
--- CraftProfit: Auction House scanning (modern C_AuctionHouse API)
+-- GoblinLedger: Auction House scanning (modern C_AuctionHouse API)
 local ADDON, ns = ...
 
 local S = {
@@ -36,8 +36,10 @@ end
 ---------------------------------------------------------------------------
 -- Result readers (run for OUR queries and for anything the player searches)
 ---------------------------------------------------------------------------
+-- Every item we see gets its price recorded, so the Bags tab and item tooltips
+-- know about anything that has been on the AH (not just crafting items).
 local function WantsPrice(id)
-    return ns.tracked[id] or (ns.Flips and ns.Flips.WantsPrice(id))
+    return id ~= nil
 end
 
 local function ReadCommodity(itemID)
@@ -266,22 +268,24 @@ local function ProcessReplicate()
     end
     if ns.DE then ns.DE.EndFull() end
     if ns.Flips then ns.Flips.EndFull() end
-    local c = 0
-    for id in pairs(ns.tracked) do
-        local a = agg[id]
-        if a then ns.SetPrice(id, a.buy, a.bid, a.qty); c = c + 1
-        else ns.SetPrice(id, nil, nil, 0) end
+    -- every listed item gets a fresh price; anything we track or knew a price for
+    -- that isn't listed now is marked "none listed" (keeps its last seen buyout)
+    local c, items = 0, 0
+    for id, a in pairs(agg) do
+        ns.SetPrice(id, a.buy, a.bid, a.qty)
+        items = items + 1
+        if ns.tracked[id] then c = c + 1 end
     end
-    if ns.Flips then -- vendor recipes: listed or not
-        for id in pairs(ns.Flips.RecipeIDs()) do
-            if not ns.tracked[id] then
-                local a = agg[id]
-                if a then ns.SetPrice(id, a.buy, a.bid, a.qty) else ns.SetPrice(id, nil, nil, 0) end
-            end
-        end
+    local gone = {}
+    for id in pairs(ns.db.prices) do gone[id] = true end
+    for id in pairs(ns.tracked) do gone[id] = true end
+    if ns.Flips then for id in pairs(ns.Flips.RecipeIDs()) do gone[id] = true end end
+    if ns.Bags then for id in pairs(ns.Bags.ItemIDs()) do gone[id] = true end end
+    for id in pairs(gone) do
+        if not agg[id] then ns.SetPrice(id, nil, nil, 0) end
     end
-    Status(("Full scan: %d auctions, %d tracked items listed."):format(n, c))
-    ns.Print(("Full scan done: %d auctions read, %d of your items are listed."):format(n, c))
+    Status(("Full scan: %d auctions, %d items priced, %d tracked items listed."):format(n, items, c))
+    ns.Print(("Full scan done: %d auctions read, %d different items priced, %d of your crafting items are listed."):format(n, items, c))
 end
 
 local replToken = 0

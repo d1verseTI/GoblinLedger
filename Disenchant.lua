@@ -1,4 +1,4 @@
--- CraftProfit: disenchanting - drop tables, expected value, and gear auctions seen on the AH
+-- GoblinLedger: disenchanting - drop tables, expected value, and gear auctions seen on the AH
 local ADDON, ns = ...
 
 local DE = {}

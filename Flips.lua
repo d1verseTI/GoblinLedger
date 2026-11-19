@@ -1,4 +1,4 @@
--- CraftProfit: flips
+-- GoblinLedger: flips
 --   * Vendor flips: AH auctions listed below what a vendor pays for the item
 --   * Vendor recipes: recipes sold by NPCs (incl. limited stock) vs. their AH price
 -- Recipe vendor data: our own copy in Data/FojjiData.lua (tools/sync_fojji.py),
@@ -167,13 +167,17 @@ function F.HasRecipeData()
     return D ~= nil and D.recipes ~= nil
 end
 
--- our synced copy: { recipeItemID, spellName, profession, skill, { {npc, zone, price, side, limited, rep}, ... } }
+-- our synced copy: { recipeItemID, spellName, profession, skill,
+--   { {npc, zone, price, side, limited, rep|false, mapID, x, y, town|false}, ... } }
 local function ListFromOwnData(src)
     local list, set = {}, {}
     for _, r in ipairs(src) do
         local vendors = {}
         for _, v in ipairs(r[5]) do
-            vendors[#vendors + 1] = { npc = v[1], zone = v[2], price = v[3], side = v[4] or "both", limited = v[5] == true, rep = v[6] }
+            vendors[#vendors + 1] = {
+                npc = v[1], zone = v[2], price = v[3], side = v[4] or "both", limited = v[5] == true,
+                rep = v[6] or nil, map = v[7], x = v[8], y = v[9], town = v[10] or nil,
+            }
         end
         table.sort(vendors, function(a, b) return a.price < b.price end)
         set[r[1]] = true
@@ -204,6 +208,12 @@ function F.RecipeList()
                             npc = s[3] or "?", zone = s[4] or "?", price = s[6],
                             side = s[7] or "both", limited = s[8] == 1, rep = s[10],
                         }
+                        local npcID = s[2] or (D.npcByName and D.npcByName[s[3]])
+                        local spot = npcID and D.npcSpots and D.npcSpots[npcID]
+                        if spot then
+                            local v = vendors[#vendors]
+                            v.map, v.x, v.y = spot[1], spot[2], spot[3]
+                        end
                     end
                 end
                 if #vendors > 0 then
@@ -218,12 +228,6 @@ function F.RecipeList()
         end
     end
     return recipeList
-end
-
--- recipe items get AH prices recorded like tracked items
-function F.WantsPrice(id)
-    if not recipeSet then F.RecipeList() end
-    return recipeSet ~= nil and recipeSet[id] == true
 end
 
 function F.RecipeIDs()
@@ -293,7 +297,7 @@ function F.RecipeRows(myFactionOnly)
             local row = {
                 item = r.item, recipe = r, vendor = pick, otherSide = not best,
                 name = (GetItemInfo(r.item)) or ("Recipe: " .. tostring(r.spell)),
-                prof = r.prof, npc = pick.npc, cost = pick.price,
+                prof = r.prof, npc = pick.npc, cost = pick.price, loc = F.Where(pick),
                 lim = pick.limited and 1 or 0,
                 ah = ah, src = src, qtyAH = qty, t = t,
             }
@@ -332,4 +336,100 @@ function F.ShowOnAH(id, unitPrice)
         RequestItem(id)
         ns.Print("Item info not loaded yet - try again in a moment.")
     end
+end
+
+---------------------------------------------------------------------------
+-- Vendor locations and waypoints
+---------------------------------------------------------------------------
+-- "Astranaar, Ashenvale", "Ironforge", or just the zone when the spot isn't in a town
+function F.Where(v)
+    if v.town and v.town ~= v.zone then return v.town .. ", " .. v.zone end
+    return v.zone or "?"
+end
+
+function F.WhereLong(v)
+    local w = F.Where(v)
+    if v.x and v.y then w = ("%s (%.1f, %.1f)"):format(w, v.x, v.y) end
+    return w
+end
+
+local function WorldPos(map, x, y) -- x, y as 0-1
+    if not (C_Map and C_Map.GetWorldPosFromMapPos and CreateVector2D) then return nil end
+    local ok, cont, pos = pcall(C_Map.GetWorldPosFromMapPos, map, CreateVector2D(x, y))
+    if ok and cont and pos then return cont, pos end
+end
+
+-- some maps (cities on some clients) refuse user waypoints: move the spot onto the zone around it
+local function Pinnable(map, x, y)
+    if not (C_Map and C_Map.CanSetUserWaypointOnMap) then return map, x, y end
+    local ok, can = pcall(C_Map.CanSetUserWaypointOnMap, map)
+    if ok and can then return map, x, y end
+    local cont, world = WorldPos(map, x, y)
+    if not cont or not C_Map.GetMapPosFromWorldPos then return nil end
+    local info = C_Map.GetMapInfo and C_Map.GetMapInfo(map)
+    local p, guard = info and info.parentMapID, 0
+    while p and p > 0 and guard < 6 do
+        guard = guard + 1
+        local okC, canP = pcall(C_Map.CanSetUserWaypointOnMap, p)
+        if okC and canP then
+            local okP, _, pos = pcall(C_Map.GetMapPosFromWorldPos, cont, world, p)
+            if okP and pos then
+                local px, py = pos:GetXY()
+                if px and px > 0 and px < 1 and py > 0 and py < 1 then return p, px, py end
+            end
+        end
+        local up = C_Map.GetMapInfo(p)
+        p = up and up.parentMapID
+    end
+end
+
+-- waypoint to a vendor: TomTom when installed, else the game's own map pin
+function F.Waypoint(v, what)
+    if not v or not v.map then
+        ns.Print(("No map spot known for %s (%s)."):format(v and v.npc or "?", v and v.zone or "?"))
+        return
+    end
+    local title = v.npc .. (what and (" - " .. what) or "")
+    local x, y = v.x / 100, v.y / 100
+    if TomTom and TomTom.AddWaypoint then
+        local ok = pcall(TomTom.AddWaypoint, TomTom, v.map, x, y,
+            { title = title, persistent = false, minimap = true, world = true, crazy = true })
+        if ok then ns.Print(("Waypoint (TomTom): %s - %s"):format(v.npc, F.WhereLong(v))) return end
+    end
+    local m, px, py = Pinnable(v.map, x, y)
+    if m and C_Map.SetUserWaypoint and UiMapPoint and UiMapPoint.CreateFromCoordinates then
+        local ok = pcall(C_Map.SetUserWaypoint, UiMapPoint.CreateFromCoordinates(m, px, py))
+        if ok then
+            if C_SuperTrack and C_SuperTrack.SetSuperTrackedUserWaypoint then
+                pcall(C_SuperTrack.SetSuperTrackedUserWaypoint, true)
+            end
+            ns.Print(("Waypoint: %s - %s"):format(v.npc, F.WhereLong(v)))
+            return
+        end
+    end
+    ns.Print(("Can't place a map pin there. %s is at %s."):format(v.npc, F.WhereLong(v)))
+end
+
+-- the vendor you can use that is closest to you (same continent), or nil
+function F.Nearest(vendors)
+    if not (C_Map and C_Map.GetBestMapForUnit and C_Map.GetPlayerMapPosition) then return nil end
+    local pmap = C_Map.GetBestMapForUnit("player")
+    local ppos = pmap and C_Map.GetPlayerMapPosition(pmap, "player")
+    if not ppos then return nil end
+    local pcont, pworld = WorldPos(pmap, ppos:GetXY())
+    if not pcont then return nil end
+    local px, py = pworld:GetXY()
+    local faction = MyFaction()
+    local best, bestD
+    for _, v in ipairs(vendors) do
+        if v.map and CanUse(v, faction) then
+            local cont, w = WorldPos(v.map, v.x / 100, v.y / 100)
+            if cont == pcont then
+                local wx, wy = w:GetXY()
+                local d = (wx - px) ^ 2 + (wy - py) ^ 2
+                if not bestD or d < bestD then best, bestD = v, d end
+            end
+        end
+    end
+    return best, bestD and math.sqrt(bestD)
 end

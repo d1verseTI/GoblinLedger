@@ -1,0 +1,17 @@
+## Interface: 16001
+## Title: GoblinLedger
+## Notes: A goblin's book of profits: crafting, disenchanting, vendor flips, vendor recipes and what in your bags is worth selling, plus AH and vendor prices on every item tooltip. /gl
+## Author: drago
+## Version: 1.1.0
+## X-Flavor: Forever
+## SavedVariables: GoblinLedgerDB
+## OptionalDeps: FojjiCore, FojjiCore_Professions, Auctionator
+
+Core.lua
+Disenchant.lua
+Data\FojjiData.lua
+Flips.lua
+Scanner.lua
+Bags.lua
+UI.lua
+Tooltip.lua

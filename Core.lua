@@ -1,6 +1,6 @@
--- CraftProfit: core data (recipes, prices, vendor prices, profit math)
+-- GoblinLedger: core data (recipes, prices, vendor prices, profit math)
 local ADDON, ns = ...
-CraftProfit = ns -- global handle for /dump debugging
+GoblinLedger = ns -- global handle for /dump debugging
 
 local GetItemInfo = (C_Item and C_Item.GetItemInfo) or GetItemInfo
 
@@ -36,6 +36,10 @@ local DEFAULTS = {
         recMyFaction = true,
         recLimitedOnly = false,
         recProfitableOnly = false,
+        bagSortKey = "best",
+        bagSortDesc = true,
+        bagAHOnly = false,    -- Bags tab: only items worth more on the AH than at a vendor
+        tooltip = true,       -- AH / vendor prices on item tooltips (/gl tooltip)
     },
 }
 
@@ -51,7 +55,7 @@ local function merge(dst, src)
 end
 
 function ns.Print(...)
-    print("|cff33ff99CraftProfit|r:", ...)
+    print("|cffffcc33GoblinLedger|r:", ...)
 end
 
 function ns.CharKey()
@@ -232,6 +236,21 @@ function ns.AHPrice(id)
     return nil
 end
 
+-- Everything we know about selling one unit of an item (used by the Bags tab and tooltips):
+--   ah, ahOld  - buyout per unit (ahOld = last seen, none listed now)
+--   bid        - lowest bid per unit
+--   qty, t     - units listed and when we last looked (qty 0 = we looked, none listed)
+--   vendor     - what a vendor pays (0 = can't be vendored, nil = not known yet)
+--   ahNet      - buyout after the AH cut
+function ns.SellInfo(id)
+    local p = ns.db.prices[id]
+    local info = { vendor = ns.Flips and ns.Flips.VendorSell(id) }
+    info.ah, info.ahOld = ns.AHPrice(id)
+    if p then info.bid, info.qty, info.t = p.bid, p.qty, p.t end
+    if info.ah then info.ahNet = info.ah * (1 - (ns.db.settings.ahCut or 0.05)) end
+    return info
+end
+
 function ns.MatUnitCost(id)
     local v = ns.db.vendor[id]
     local ah, old = ns.AHPrice(id)
@@ -352,8 +371,8 @@ ev:SetScript("OnEvent", function(_, event, arg1)
     end
     if event == "ADDON_LOADED" then
         if arg1 ~= ADDON then return end
-        CraftProfitDB = merge(CraftProfitDB or {}, DEFAULTS)
-        ns.db = CraftProfitDB
+        GoblinLedgerDB = merge(GoblinLedgerDB or {}, DEFAULTS)
+        ns.db = GoblinLedgerDB
         -- one-time: auto-scan used to default ON; turn it off for existing saves
         if not ns.db.settings.autoScanOffMigrated then
             ns.db.settings.autoScan = false
@@ -375,12 +394,18 @@ end)
 ---------------------------------------------------------------------------
 -- Slash
 ---------------------------------------------------------------------------
-SLASH_CRAFTPROFIT1 = "/cp"
-SLASH_CRAFTPROFIT2 = "/craftprofit"
-SlashCmdList.CRAFTPROFIT = function(msg)
+SLASH_GOBLINLEDGER1 = "/gl"
+SLASH_GOBLINLEDGER2 = "/goblinledger"
+SLASH_GOBLINLEDGER3 = "/cp" -- old CraftProfit command
+SlashCmdList.GOBLINLEDGER = function(msg)
     msg = (msg or ""):lower():match("^%s*(.-)%s*$")
     if msg == "scan" then
         ns.Scanner.StartTargeted(false)
+    elseif msg == "bags" then
+        ns.UI.ShowTab("bags")
+    elseif msg == "tooltip" then
+        ns.db.settings.tooltip = not ns.db.settings.tooltip
+        ns.Print("Prices on item tooltips:", ns.db.settings.tooltip and "ON" or "OFF")
     elseif msg == "full" then
         ns.Scanner.FullScan()
     elseif msg == "stop" then
@@ -396,8 +421,9 @@ SlashCmdList.CRAFTPROFIT = function(msg)
         ns.Print("All recorded prices cleared.")
         ns.RequestRefresh()
     elseif msg == "help" then
-        ns.Print("/cp - toggle window | /cp scan - scan all tracked items | /cp full - full AH scan (15 min cooldown)")
-        ns.Print("/cp stop | /cp auto - toggle auto-scan on AH open | /cp stale <min> | /cp resetprices")
+        ns.Print("/gl - toggle window | /gl bags - what in your bags is worth selling | /gl tooltip - prices on tooltips on/off")
+        ns.Print("/gl scan - scan all tracked items | /gl full - full AH scan (15 min cooldown) | /gl stop")
+        ns.Print("/gl auto - toggle auto-scan on AH open | /gl stale <min> | /gl resetprices")
         ns.Print("Open each profession window once so its recipes get recorded.")
     else
         ns.UI.Toggle()

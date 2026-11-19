@@ -1,4 +1,4 @@
--- CraftProfit: window with tabs (Crafting, Disenchant, Vendor Flips, Vendor Recipes)
+-- GoblinLedger: window with tabs (Crafting, Disenchant, Vendor Flips, Vendor Recipes, Bags)
 local ADDON, ns = ...
 
 local UI = {}
@@ -60,6 +60,16 @@ local function Num(x)
 end
 
 local TIME_LEFT = { [0] = "|cffff4040<30m|r", [1] = "|cffffd0602h|r", [2] = "12h", [3] = "48h" }
+
+ns.Age = Age
+
+-- item tooltip for our own rows: the rows add their own price lines, so the
+-- general price lines from Tooltip.lua are skipped here
+local function SetItemTip(id)
+    ns.suppressTip = true
+    GameTooltip:SetItemByID(id)
+    ns.suppressTip = false
+end
 
 ---------------------------------------------------------------------------
 -- shared bits
@@ -219,10 +229,14 @@ local function BuildPanel(def)
         end
         row:SetScript("OnEnter", function(self) if self.data then def.tooltip(self, self.data) end end)
         row:SetScript("OnLeave", GameTooltip_Hide)
-        row:RegisterForClicks("LeftButtonUp")
-        row:SetScript("OnClick", function(self)
+        row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+        row:SetScript("OnClick", function(self, button)
             local d = self.data
             if not d then return end
+            if button == "RightButton" then
+                if def.rightClick then def.rightClick(self, d) end
+                return
+            end
             if IsShiftKeyDown() then
                 local _, link = GetItemInfo(d.item)
                 if link then ChatEdit_InsertLink(link) end
@@ -338,10 +352,10 @@ end
 
 function craftDef.tooltip(row, d)
     GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
-    GameTooltip:SetItemByID(d.item)
+    SetItemTip(d.item)
     GameTooltip:AddLine(" ")
     local qty = d.recipe.qty or 1
-    GameTooltip:AddLine(("|cff33ff99CraftProfit|r - %s (makes %s)"):format(d.prof, Num(qty)))
+    GameTooltip:AddLine(("|cffffcc33GoblinLedger|r - %s (makes %s)"):format(d.prof, Num(qty)))
     GameTooltip:AddLine("Materials:", 1, 0.82, 0)
     for _, m in ipairs(d.mats) do
         local src = (m.src == "vendor" and " |cff80c0ffvendor|r") or (m.src == "ah-old" and " |cff909090old|r") or ""
@@ -473,9 +487,9 @@ end
 
 function deDef.tooltip(row, d)
     GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
-    GameTooltip:SetItemByID(d.item)
+    SetItemTip(d.item)
     GameTooltip:AddLine(" ")
-    GameTooltip:AddLine("|cff33ff99CraftProfit|r - Disenchant")
+    GameTooltip:AddLine("|cffffcc33GoblinLedger|r - Disenchant")
     if not d.outs then
         GameTooltip:AddLine("Waiting for item info (quality / item level)...", 0.7, 0.7, 0.7)
         GameTooltip:Show()
@@ -614,9 +628,9 @@ end
 
 function flipDef.tooltip(row, d)
     GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
-    GameTooltip:SetItemByID(d.item)
+    SetItemTip(d.item)
     GameTooltip:AddLine(" ")
-    GameTooltip:AddLine("|cff33ff99CraftProfit|r - Vendor flip")
+    GameTooltip:AddLine("|cffffcc33GoblinLedger|r - Vendor flip")
     GameTooltip:AddDoubleLine("Vendor pays (each)", Money(d.sell), 1, 0.82, 0, 1, 1, 1)
     GameTooltip:AddLine(d.kind == "Bid" and "Auction:" or "Listings under vendor price:", 1, 0.82, 0)
     for i, a in ipairs(d.auctions) do
@@ -653,16 +667,17 @@ end
 local recDef = {
     sortKey = "recSortKey", sortDesc = "recSortDesc",
     cols = {
-        { key = "name",   label = "Recipe",      w = 205, align = "LEFT" },
-        { key = "prof",   label = "Profession",  w = 85,  align = "LEFT" },
-        { key = "npc",    label = "Vendor",      w = 110, align = "LEFT" },
-        { key = "lim",    label = "Stock",       w = 50,  align = "LEFT", tip = "Limited: the vendor only has a few and restocks over time - these sell best on the AH." },
-        { key = "cost",   label = "Vendor cost", w = 75,  align = "RIGHT" },
-        { key = "ah",     label = "AH Buyout",   w = 80,  align = "RIGHT" },
-        { key = "profit", label = "Profit",      w = 80,  align = "RIGHT", tip = "AH buyout minus the AH cut minus the vendor price (before any reputation discount)." },
-        { key = "margin", label = "Margin",      w = 55,  align = "RIGHT" },
-        { key = "qtyAH",  label = "On AH",       w = 45,  align = "RIGHT" },
-        { key = "t",      label = "Age",         w = 40,  align = "RIGHT" },
+        { key = "name",   label = "Recipe",      w = 190, align = "LEFT" },
+        { key = "prof",   label = "Profession",  w = 80,  align = "LEFT" },
+        { key = "npc",    label = "Vendor",      w = 105, align = "LEFT" },
+        { key = "loc",    label = "Location",    w = 150, align = "LEFT", tip = "Where the vendor stands. Right-click a row to set a waypoint there." },
+        { key = "lim",    label = "Stock",       w = 45,  align = "LEFT", tip = "Limited: the vendor only has a few and restocks over time - these sell best on the AH." },
+        { key = "cost",   label = "Vendor cost", w = 70,  align = "RIGHT" },
+        { key = "ah",     label = "AH Buyout",   w = 75,  align = "RIGHT" },
+        { key = "profit", label = "Profit",      w = 75,  align = "RIGHT", tip = "AH buyout minus the AH cut minus the vendor price (before any reputation discount)." },
+        { key = "margin", label = "Margin",      w = 50,  align = "RIGHT" },
+        { key = "qtyAH",  label = "On AH",       w = 40,  align = "RIGHT" },
+        { key = "t",      label = "Age",         w = 35,  align = "RIGHT" },
     },
 }
 
@@ -695,7 +710,8 @@ function recDef.getData(p)
     local q = p.search:GetText():lower()
     local s = ns.db.settings
     for _, r in ipairs(ns.Flips.RecipeRows(s.recMyFaction)) do
-        if (q == "" or tostring(r.name):lower():find(q, 1, true) or tostring(r.npc):lower():find(q, 1, true))
+        if (q == "" or tostring(r.name):lower():find(q, 1, true) or tostring(r.npc):lower():find(q, 1, true)
+                or tostring(r.loc):lower():find(q, 1, true))
             and (not s.recLimitedOnly or r.lim == 1)
             and (not s.recProfitableOnly or (r.profit and r.profit > 0)) then
             out[#out + 1] = r
@@ -711,6 +727,9 @@ function recDef.fill(row, d)
     c.name:SetText(ItemName(d.item, d.name))
     c.prof:SetText(d.prof)
     c.npc:SetText(d.otherSide and Grey(d.npc) or d.npc)
+    local loc = d.loc or "?"
+    if not d.vendor.map then loc = loc .. " |cff808080(?)|r" end
+    c.loc:SetText(d.otherSide and Grey(loc) or loc)
     c.lim:SetText(d.lim == 1 and "|cffff9030Limited|r" or "|cff909090-|r")
     c.cost:SetText(Money(d.cost, true))
     if d.ah then
@@ -728,16 +747,16 @@ function recDef.fill(row, d)
     c.t:SetText(Age(d.t))
 end
 
-local SRC_NAME = { cp = "CraftProfit scan", old = "last seen (none listed now)", auctionator = "Auctionator", fojji = "FojjiCore scan" }
+local SRC_NAME = { cp = "GoblinLedger scan", old = "last seen (none listed now)", auctionator = "Auctionator", fojji = "FojjiCore scan" }
 
 function recDef.tooltip(row, d)
     GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
-    GameTooltip:SetItemByID(d.item)
+    SetItemTip(d.item)
     GameTooltip:AddLine(" ")
-    GameTooltip:AddLine(("|cff33ff99CraftProfit|r - %s%s"):format(d.prof, d.recipe.skill and (" (" .. d.recipe.skill .. ")") or ""))
+    GameTooltip:AddLine(("|cffffcc33GoblinLedger|r - %s%s"):format(d.prof, d.recipe.skill and (" (" .. d.recipe.skill .. ")") or ""))
     GameTooltip:AddLine("Sold by:", 1, 0.82, 0)
     for _, v in ipairs(d.recipe.vendors) do
-        local left = ("  %s%s|r - %s"):format(SIDE_COLOR[v.side] or "|cffffffff", v.npc, v.zone)
+        local left = ("  %s%s|r - %s"):format(SIDE_COLOR[v.side] or "|cffffffff", v.npc, ns.Flips.WhereLong(v))
         if v.limited then left = left .. "  |cffff9030limited|r" end
         GameTooltip:AddDoubleLine(left, Money(v.price), 1, 1, 1, 1, 1, 1)
         if v.rep then GameTooltip:AddLine("      needs " .. v.rep, 0.6, 0.8, 1) end
@@ -752,12 +771,27 @@ function recDef.tooltip(row, d)
         GameTooltip:AddLine("No AH price yet - Full Scan or click to search.", 1, 0.5, 0.5)
     end
     GameTooltip:AddLine(" ")
+    local near, dist = ns.Flips.Nearest(d.recipe.vendors)
+    if near and #d.recipe.vendors > 1 then
+        GameTooltip:AddLine(("Nearest to you: %s - %s (%d yd)"):format(near.npc, ns.Flips.Where(near), math.floor(dist)), 0.6, 1, 0.6)
+    end
     GameTooltip:AddLine("Click: open on the AH   Shift-click: link", 0.6, 0.6, 0.6)
+    GameTooltip:AddLine(("Right-click: waypoint to %s   Ctrl-right-click: nearest vendor"):format(d.npc), 0.6, 0.6, 0.6)
     GameTooltip:Show()
 end
 
 function recDef.click(row, d)
     ns.Flips.ShowOnAH(d.item, d.ah)
+end
+
+function recDef.rightClick(row, d)
+    local what = d.name
+    if IsControlKeyDown() then
+        local near = ns.Flips.Nearest(d.recipe.vendors)
+        if near then ns.Flips.Waypoint(near, what) return end
+        ns.Print("No vendor for this recipe on your continent - using the one in the list.")
+    end
+    ns.Flips.Waypoint(d.vendor, what)
 end
 
 function recDef.footer(p)
@@ -769,6 +803,134 @@ function recDef.footer(p)
         end
     end
     return ("%d recipes  |  %d profitable (%d limited stock)"):format(#p.data, n, lim)
+end
+
+---------------------------------------------------------------------------
+-- Bags tab: what in your bags is worth selling, and where
+---------------------------------------------------------------------------
+local bagDef = {
+    sortKey = "bagSortKey", sortDesc = "bagSortDesc",
+    cols = {
+        { key = "name",    label = "Item",         w = 205, align = "LEFT" },
+        { key = "n",       label = "Qty",          w = 40,  align = "RIGHT" },
+        { key = "vendor",  label = "Vendor pays",  w = 85,  align = "RIGHT", tip = "What a vendor pays for all of them." },
+        { key = "ah",      label = "AH Buyout",    w = 85,  align = "RIGHT", tip = "Cheapest buyout per item. Grey (in brackets) = none listed right now, last price seen." },
+        { key = "ahTotal", label = "AH Total",     w = 90,  align = "RIGHT", tip = "All of them at the cheapest buyout, after the AH cut." },
+        { key = "where",   label = "Sell at",      w = 55,  align = "LEFT" },
+        { key = "best",    label = "Best value",   w = 85,  align = "RIGHT" },
+        { key = "gain",    label = "AH vs vendor", w = 85,  align = "RIGHT", tip = "How much more (or less) the AH pays than a vendor for all of them." },
+        { key = "qtyAH",   label = "On AH",        w = 50,  align = "RIGHT" },
+        { key = "t",       label = "Age",          w = 45,  align = "RIGHT" },
+    },
+}
+
+function bagDef.toolbar(p)
+    p.search = MakeSearch(p, p, 0)
+    p.search:ClearAllPoints()
+    p.search:SetPoint("TOPLEFT", 20, -3)
+    p.checks = {}
+    p.checks[1] = MakeCheck(p, "AH pays more", "bagAHOnly", p.search, 10)
+    local btn = MakeButton(p, "Scan bag items", 120)
+    btn:SetPoint("LEFT", p.checks[1].label, "RIGHT", 16, 0)
+    btn:SetScript("OnClick", function()
+        local ids = {}
+        for _, d in ipairs(p.data) do ids[#ids + 1] = d.item end
+        if #ids > 0 then ns.Scanner.StartTargeted(false, ids) end
+    end)
+    btn:SetMotionScriptsWhileDisabled(true)
+    Tip(btn, function()
+        if not ns.Scanner.open then return "Open the Auction House first." end
+        return ("Search the AH for the %d items in this list (about 1 per second). A Full Scan prices all of them at once."):format(#p.data)
+    end)
+    local hint = p:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    hint:SetPoint("LEFT", btn, "RIGHT", 12, 0)
+    hint:SetText("Soulbound items are left out.")
+end
+
+function bagDef.getData(p)
+    local out = {}
+    local q = p.search:GetText():lower()
+    local ahOnly = ns.db.settings.bagAHOnly
+    for _, r in ipairs(ns.Bags.Rows()) do
+        if (q == "" or tostring(r.name):lower():find(q, 1, true))
+            and (not ahOnly or r.where == "AH") then
+            out[#out + 1] = r
+        end
+    end
+    return out
+end
+
+function bagDef.fill(row, d)
+    local c = row.cells
+    c.name:SetText(ItemName(d.item, d.name))
+    c.n:SetText(tostring(d.n))
+    if d.vendorEach == 0 then c.vendor:SetText("|cff808080can't|r")
+    else c.vendor:SetText(Money(d.vendor, true)) end
+    if d.ah then
+        c.ah:SetText(d.ahOld and Grey("(" .. Money(d.ah, true) .. ")") or Money(d.ah, true))
+        c.ahTotal:SetText(d.ahOld and Grey(Money(d.ahTotal, true)) or Money(d.ahTotal, true))
+    elseif d.qtyAH == 0 then
+        c.ah:SetText("|cff40ff40none|r")
+        c.ahTotal:SetText("|cff808080--|r")
+    else
+        c.ah:SetText("|cff808080--|r")
+        c.ahTotal:SetText("|cff808080--|r")
+    end
+    c.where:SetText((d.where == "AH" and "|cffffcc33AH|r") or (d.where == "Vendor" and "|cff80c0ffVendor|r") or "|cff808080?|r")
+    c.best:SetText(Money(d.best, true))
+    if d.gain then
+        c.gain:SetText(d.gain > 0 and ("|cff40ff40+|r" .. Money(d.gain, true)) or Money(d.gain, true))
+    else
+        c.gain:SetText("|cff808080--|r")
+    end
+    c.qtyAH:SetText(d.qtyAH and tostring(d.qtyAH) or "|cff808080--|r")
+    c.t:SetText(Age(d.t))
+end
+
+function bagDef.tooltip(row, d)
+    GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
+    SetItemTip(d.item)
+    GameTooltip:AddLine(" ")
+    GameTooltip:AddLine(("|cffffcc33GoblinLedger|r - in your bags: %d"):format(d.n))
+    local cut = ns.db.settings.ahCut or 0.05
+    if d.vendorEach == 0 then
+        GameTooltip:AddLine("Vendors won't buy this.", 0.7, 0.7, 0.7)
+    elseif d.vendorEach then
+        GameTooltip:AddDoubleLine(("Vendor: %s each"):format(Money(d.vendorEach)), Money(d.vendor), 1, 0.82, 0, 1, 1, 1)
+    end
+    if d.ah then
+        GameTooltip:AddDoubleLine(("AH buyout: %s each%s"):format(Money(d.ah), d.ahOld and " |cff909090(last seen)|r" or ""),
+            Money(d.ahTotal) .. (" |cff909090after %d%% cut|r"):format(cut * 100), 1, 0.82, 0, 1, 1, 1)
+        if d.bid and d.bid < d.ah then GameTooltip:AddDoubleLine("Lowest bid", Money(d.bid) .. " each", 1, 0.82, 0, 1, 1, 1) end
+        if d.qtyAH and d.qtyAH > 0 then GameTooltip:AddDoubleLine("Listed on the AH", tostring(d.qtyAH), 1, 0.82, 0, 1, 1, 1) end
+    elseif d.qtyAH == 0 then
+        GameTooltip:AddLine("None on the AH right now - you set the price!", 0.25, 1, 0.25)
+    else
+        GameTooltip:AddLine("No AH price yet - scan your bag items or do a Full Scan.", 1, 0.5, 0.5)
+    end
+    if d.where == "AH" and d.gain and d.vendor and d.vendor > 0 then
+        GameTooltip:AddLine(("Selling on the AH pays %s more than a vendor."):format(Money(d.gain)), 0.25, 1, 0.25)
+    elseif d.where == "Vendor" and d.ah then
+        GameTooltip:AddLine("A vendor pays more than the AH - just vendor it.", 0.5, 0.75, 1)
+    end
+    GameTooltip:AddLine(" ")
+    GameTooltip:AddLine("Click: rescan this item (AH open)   Shift-click: link", 0.6, 0.6, 0.6)
+    GameTooltip:Show()
+end
+
+function bagDef.click(row, d)
+    ns.Scanner.StartTargeted(false, { d.item })
+end
+
+function bagDef.footer(p)
+    local vendor, best, ahN, ahV = 0, 0, 0, 0
+    for _, d in ipairs(p.data) do
+        vendor = vendor + (d.vendor or 0)
+        best = best + (d.best or 0)
+        if d.where == "AH" then ahN, ahV = ahN + 1, ahV + d.best end
+    end
+    return ("%d items  |  vendor all: %s  |  best of both: %s  (%d to the AH for %s)"):format(
+        #p.data, Money(vendor, true), Money(best, true), ahN, Money(ahV, true))
 end
 
 ---------------------------------------------------------------------------
@@ -815,9 +977,15 @@ local function UpdateScanState()
 end
 
 local function Build()
-    f = CreateFrame("Frame", "CraftProfitFrame", UIParent, "BasicFrameTemplateWithInset")
-    local width = 80
-    for _, c in ipairs(craftDef.cols) do width = width + c.w + 4 end
+    f = CreateFrame("Frame", "GoblinLedgerFrame", UIParent, "BasicFrameTemplateWithInset")
+    -- wide enough for the widest tab
+    local widest = 0
+    for _, def in ipairs({ craftDef, deDef, flipDef, recDef, bagDef }) do
+        local w = 0
+        for _, c in ipairs(def.cols) do w = w + c.w + 4 end
+        if w > widest then widest = w end
+    end
+    local width = 80 + widest
     f:SetSize(width, PANEL_TOP + ROWS_Y + NUM_ROWS * ROW_H + 34)
     f:SetPoint("CENTER")
     f:SetFrameStrata("HIGH")
@@ -828,11 +996,11 @@ local function Build()
     f:SetScript("OnDragStop", f.StopMovingOrSizing)
     f:SetClampedToScreen(true)
     f:Hide()
-    tinsert(UISpecialFrames, "CraftProfitFrame")
+    tinsert(UISpecialFrames, "GoblinLedgerFrame")
 
     local title = f.TitleText or f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     if not f.TitleText then title:SetPoint("TOP", 0, -5) end
-    title:SetText("CraftProfit")
+    title:SetText("|cffffcc33GoblinLedger|r")
 
     -- tabs
     tabs.craft = MakeButton(f, "Crafting", 100)
@@ -847,6 +1015,9 @@ local function Build()
     tabs.rec = MakeButton(f, "Vendor Recipes", 110)
     tabs.rec:SetPoint("LEFT", tabs.flip, "RIGHT", 4, 0)
     tabs.rec:SetScript("OnClick", function() SelectTab("rec") end)
+    tabs.bags = MakeButton(f, "Bags", 80)
+    tabs.bags:SetPoint("LEFT", tabs.rec, "RIGHT", 4, 0)
+    tabs.bags:SetScript("OnClick", function() SelectTab("bags") end)
 
     -- scan controls (shared)
     stopBtn = MakeButton(f, "Stop", 50)
@@ -873,6 +1044,7 @@ local function Build()
     panels.de = BuildPanel(deDef)
     panels.flip = BuildPanel(flipDef)
     panels.rec = BuildPanel(recDef)
+    panels.bags = BuildPanel(bagDef)
 
     -- bottom: progress bar + status
     progress = CreateFrame("StatusBar", nil, f)
@@ -925,6 +1097,12 @@ function UI.Show()
     f:Show()
 end
 
+function UI.ShowTab(name)
+    if not f then Build() end
+    if f:IsShown() then SelectTab(name)
+    else ns.db.settings.tab = name; f:Show() end -- OnShow selects the saved tab
+end
+
 -- button on the Auction House window (shows scan activity too)
 local ahBtn
 function UI.OnAHShow()
@@ -933,7 +1111,7 @@ function UI.OnAHShow()
     if not ahBtn then
         ahBtn = CreateFrame("Button", nil, ah, "UIPanelButtonTemplate")
         ahBtn:SetSize(120, 22)
-        ahBtn:SetText("CraftProfit")
+        ahBtn:SetText("GoblinLedger")
         ahBtn:SetPoint("TOPRIGHT", ah, "TOPRIGHT", -30, -1)
         ahBtn:SetFrameStrata("HIGH")
         ahBtn:SetScript("OnClick", function()
@@ -951,7 +1129,7 @@ function UI.OnAHShow()
                 n = (n % 3) + 1
                 ahBtn:SetText("|cff40ff40Scanning" .. ("."):rep(n) .. "|r")
             else
-                ahBtn:SetText("CraftProfit")
+                ahBtn:SetText("GoblinLedger")
             end
         end)
     end
