@@ -10,7 +10,7 @@ Formerly **CraftProfit**. The old `/cp` command still works.
 - **Disenchant tab**: gear auctions seen on the AH, compared against the expected value of what they disenchant into.
 - **Vendor Flips tab**: AH auctions listed below what a vendor pays for the item. Click a row to open it in the AH buy screen.
 - **Vendor Recipes tab**: recipes sold by NPCs (including limited stock and reputation recipes) compared with their AH price. It shows each vendor's location, such as "Astranaar, Ashenvale" or "Ironforge", with map coordinates. Right-click a row to set a waypoint to that vendor, or Ctrl+right-click for the nearest one you can use. Waypoints use TomTom if it's installed, otherwise the game's map pin. Needs the optional recipe data, see below.
-- **Bags tab**: everything in your bags that isn't soulbound, with what it's worth at a vendor and on the AH, and which one pays more.
+- **Bags tab**: everything in your bags that isn't soulbound, with what it's worth at a vendor and on the AH, and which one pays more. The **Values** button switches the money columns between one item, one full stack, or everything you have, so you can sort by what's worth most per item. The tooltip shows all three.
 - **Item tooltips**: AH and vendor prices on every item tooltip (`/gl tooltip` to turn off).
 - **Targeted scan**: scans only the items you track, instead of the whole AH. It pauses while you're on the Sell tab or posting.
 

@@ -38,6 +38,7 @@ local DEFAULTS = {
         recProfitableOnly = false,
         bagSortKey = "best",
         bagSortDesc = true,
+        bagView = "each",     -- Bags tab money columns: "each" item, full "stack", or "all" you have
         bagAHOnly = false,    -- Bags tab: only items worth more on the AH than at a vendor
         tooltip = true,       -- AH / vendor prices on item tooltips (/gl tooltip)
     },

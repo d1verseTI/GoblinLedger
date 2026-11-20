@@ -813,12 +813,12 @@ local bagDef = {
     cols = {
         { key = "name",    label = "Item",         w = 205, align = "LEFT" },
         { key = "n",       label = "Qty",          w = 40,  align = "RIGHT" },
-        { key = "vendor",  label = "Vendor pays",  w = 85,  align = "RIGHT", tip = "What a vendor pays for all of them." },
+        { key = "vendor",  label = "Vendor pays",  w = 85,  align = "RIGHT", tip = "What a vendor pays (each / per stack / for all, see the Values button)." },
         { key = "ah",      label = "AH Buyout",    w = 85,  align = "RIGHT", tip = "Cheapest buyout per item. Grey (in brackets) = none listed right now, last price seen." },
-        { key = "ahTotal", label = "AH Total",     w = 90,  align = "RIGHT", tip = "All of them at the cheapest buyout, after the AH cut." },
+        { key = "ahTotal", label = "AH net",       w = 90,  align = "RIGHT", tip = "At the cheapest buyout, after the AH cut (each / per stack / for all)." },
         { key = "where",   label = "Sell at",      w = 55,  align = "LEFT" },
         { key = "best",    label = "Best value",   w = 85,  align = "RIGHT" },
-        { key = "gain",    label = "AH vs vendor", w = 85,  align = "RIGHT", tip = "How much more (or less) the AH pays than a vendor for all of them." },
+        { key = "gain",    label = "AH vs vendor", w = 85,  align = "RIGHT", tip = "How much more (or less) the AH pays than a vendor (each / per stack / for all)." },
         { key = "qtyAH",   label = "On AH",        w = 50,  align = "RIGHT" },
         { key = "t",       label = "Age",          w = 45,  align = "RIGHT" },
     },
@@ -829,7 +829,22 @@ function bagDef.toolbar(p)
     p.search:ClearAllPoints()
     p.search:SetPoint("TOPLEFT", 20, -3)
     p.checks = {}
-    p.checks[1] = MakeCheck(p, "AH pays more", "bagAHOnly", p.search, 10)
+    local VIEWS = { "each", "stack", "all" }
+    local VIEW_TEXT = { each = "Values: Each", stack = "Values: Stack", all = "Values: All" }
+    local viewBtn = MakeButton(p, VIEW_TEXT.each, 110)
+    viewBtn:SetPoint("LEFT", p.search, "RIGHT", 10, 0)
+    viewBtn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    viewBtn:SetScript("OnClick", function(_, button)
+        local cur = ns.db.settings.bagView or "each"
+        local i = 1
+        for k, v in ipairs(VIEWS) do if v == cur then i = k end end
+        i = button == "RightButton" and ((i - 2) % #VIEWS + 1) or (i % #VIEWS + 1)
+        ns.db.settings.bagView = VIEWS[i]
+        UI.Refresh()
+    end)
+    Tip(viewBtn, "What the money columns show: one item (Each), one full stack (Stack), or everything you have (All). Click to switch.")
+    p.viewBtn, p.viewText = viewBtn, VIEW_TEXT
+    p.checks[1] = MakeCheck(p, "AH pays more", "bagAHOnly", viewBtn, 10)
     local btn = MakeButton(p, "Scan bag items", 120)
     btn:SetPoint("LEFT", p.checks[1].label, "RIGHT", 16, 0)
     btn:SetScript("OnClick", function()
@@ -847,11 +862,28 @@ function bagDef.toolbar(p)
     hint:SetText("Soulbound items are left out.")
 end
 
+-- header labels say what the money columns are for
+local BAG_SUFFIX = { each = " (each)", stack = " (stack)", all = " (all)" }
+local BAG_MONEY = { vendor = "Vendor", ahTotal = "AH net", best = "Best", gain = "AH vs vend." }
+function bagDef.onRefresh(p)
+    local s = ns.db.settings
+    local view = s.bagView or "each"
+    p.viewBtn:SetText(p.viewText[view] or p.viewText.each)
+    for _, h in ipairs(p.headers) do
+        local base = BAG_MONEY[h.key]
+        if base then
+            h.label = base .. BAG_SUFFIX[view]
+            local arrow = (h.key == s[bagDef.sortKey]) and (s[bagDef.sortDesc] and " v" or " ^") or ""
+            h.text:SetText(h.label .. arrow)
+        end
+    end
+end
+
 function bagDef.getData(p)
     local out = {}
     local q = p.search:GetText():lower()
     local ahOnly = ns.db.settings.bagAHOnly
-    for _, r in ipairs(ns.Bags.Rows()) do
+    for _, r in ipairs(ns.Bags.Rows(ns.db.settings.bagView or "each")) do
         if (q == "" or tostring(r.name):lower():find(q, 1, true))
             and (not ahOnly or r.where == "AH") then
             out[#out + 1] = r
@@ -863,7 +895,9 @@ end
 function bagDef.fill(row, d)
     local c = row.cells
     c.name:SetText(ItemName(d.item, d.name))
-    c.n:SetText(tostring(d.n))
+    local qty = tostring(d.n)
+    if (ns.db.settings.bagView or "each") == "stack" and d.stackMax > 1 then qty = qty .. " |cff909090/" .. d.stackMax .. "|r" end
+    c.n:SetText(qty)
     if d.vendorEach == 0 then c.vendor:SetText("|cff808080can't|r")
     else c.vendor:SetText(Money(d.vendor, true)) end
     if d.ah then
@@ -895,12 +929,25 @@ function bagDef.tooltip(row, d)
     local cut = ns.db.settings.ahCut or 0.05
     if d.vendorEach == 0 then
         GameTooltip:AddLine("Vendors won't buy this.", 0.7, 0.7, 0.7)
-    elseif d.vendorEach then
-        GameTooltip:AddDoubleLine(("Vendor: %s each"):format(Money(d.vendorEach)), Money(d.vendor), 1, 0.82, 0, 1, 1, 1)
     end
     if d.ah then
-        GameTooltip:AddDoubleLine(("AH buyout: %s each%s"):format(Money(d.ah), d.ahOld and " |cff909090(last seen)|r" or ""),
-            Money(d.ahTotal) .. (" |cff909090after %d%% cut|r"):format(cut * 100), 1, 0.82, 0, 1, 1, 1)
+        GameTooltip:AddDoubleLine("AH buyout (each)", Money(d.ah) .. (d.ahOld and " |cff909090(last seen)|r" or ""), 1, 0.82, 0, 1, 1, 1)
+    end
+    -- the same money for one item, one stack and everything you have
+    local groups = { { "Each", 1 } }
+    if d.stackMax > 1 then groups[#groups + 1] = { ("Stack of %d"):format(d.stackMax), d.stackMax } end
+    if d.n > 1 and d.n ~= d.stackMax then groups[#groups + 1] = { ("All %d"):format(d.n), d.n } end
+    if d.vendorEach ~= 0 and (d.vendorEach or d.ahNet) then
+        GameTooltip:AddDoubleLine(" ", ("|cff80c0ffVendor|r   |cffffcc33AH net (-%d%%)|r"):format(cut * 100), 1, 1, 1, 1, 1, 1)
+        for _, g in ipairs(groups) do
+            local v, a, where = ns.Bags.Values(d.vendorEach, d.ahNet, g[2])
+            local vt = v and Money(v, true) or "|cff808080--|r"
+            local at = a and Money(a, true) or "|cff808080--|r"
+            if where == "AH" then at = "|cff40ff40>|r " .. at elseif where == "Vendor" and a then vt = "|cff40ff40>|r " .. vt end
+            GameTooltip:AddDoubleLine("  " .. g[1], vt .. "   " .. at, 1, 1, 1, 1, 1, 1)
+        end
+    end
+    if d.ah then
         if d.bid and d.bid < d.ah then GameTooltip:AddDoubleLine("Lowest bid", Money(d.bid) .. " each", 1, 0.82, 0, 1, 1, 1) end
         if d.qtyAH and d.qtyAH > 0 then GameTooltip:AddDoubleLine("Listed on the AH", tostring(d.qtyAH), 1, 0.82, 0, 1, 1, 1) end
     elseif d.qtyAH == 0 then
@@ -909,7 +956,8 @@ function bagDef.tooltip(row, d)
         GameTooltip:AddLine("No AH price yet - scan your bag items or do a Full Scan.", 1, 0.5, 0.5)
     end
     if d.where == "AH" and d.gain and d.vendor and d.vendor > 0 then
-        GameTooltip:AddLine(("Selling on the AH pays %s more than a vendor."):format(Money(d.gain)), 0.25, 1, 0.25)
+        local per = (d.count == 1 and "each") or (d.count == d.n and "for all") or ("per stack of " .. d.count)
+        GameTooltip:AddLine(("Selling on the AH pays %s more than a vendor (%s)."):format(Money(d.gain), per), 0.25, 1, 0.25)
     elseif d.where == "Vendor" and d.ah then
         GameTooltip:AddLine("A vendor pays more than the AH - just vendor it.", 0.5, 0.75, 1)
     end
@@ -924,10 +972,10 @@ end
 
 function bagDef.footer(p)
     local vendor, best, ahN, ahV = 0, 0, 0, 0
-    for _, d in ipairs(p.data) do
-        vendor = vendor + (d.vendor or 0)
-        best = best + (d.best or 0)
-        if d.where == "AH" then ahN, ahV = ahN + 1, ahV + d.best end
+    for _, d in ipairs(p.data) do -- always totals for everything you have
+        vendor = vendor + (d.totVendor or 0)
+        best = best + (d.totBest or 0)
+        if d.totWhere == "AH" then ahN, ahV = ahN + 1, ahV + d.totBest end
     end
     return ("%d items  |  vendor all: %s  |  best of both: %s  (%d to the AH for %s)"):format(
         #p.data, Money(vendor, true), Money(best, true), ahN, Money(ahV, true))

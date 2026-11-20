@@ -63,31 +63,42 @@ function B.ItemIDs()
     return set
 end
 
--- One row per item (all stacks together)
-function B.Rows()
+-- vendor money, AH money (after cut), best of the two and AH-minus-vendor for `count` items
+local function Values(vendorEach, ahNet, count)
+    local v = vendorEach and vendorEach * count
+    local a = ahNet and math.floor(ahNet * count)
+    local where, best
+    -- vendor money is certain, AH money is a listing price
+    if a and a > (v or 0) then
+        where, best = "AH", a
+    elseif v and v > 0 then
+        where, best = "Vendor", v
+    elseif a then
+        where, best = "AH", a
+    end
+    return v, a, where, best, a and (a - (v or 0))
+end
+B.Values = Values
+
+-- One row per item. view = "each" | "stack" | "all": what the money columns are for.
+-- The tot* fields are always for everything you have (footer totals).
+function B.Rows(view)
     local rows = {}
     for id, e in pairs(B.Items()) do
         local s = ns.SellInfo(id)
         local n = e.n
-        local name = GetItemInfo(id)
+        local name, _, _, _, _, _, _, stackMax = GetItemInfo(id)
         if not name and C_Item and C_Item.RequestLoadItemDataByID then C_Item.RequestLoadItemDataByID(id) end
+        stackMax = (type(stackMax) == "number" and stackMax > 0) and stackMax or 1
         local vendorEach = e.noValue and 0 or s.vendor
+        local count = (view == "each" and 1) or (view == "stack" and stackMax) or n
         local r = {
-            item = id, name = name or ("item:" .. id), icon = e.icon, n = n,
-            vendorEach = vendorEach, vendor = vendorEach and vendorEach * n,
+            item = id, name = name or ("item:" .. id), icon = e.icon, n = n, stackMax = stackMax, count = count,
+            vendorEach = vendorEach, ahNet = s.ahNet,
             ah = s.ah, ahOld = s.ahOld, bid = s.bid, qtyAH = s.qty, t = s.t,
-            ahTotal = s.ahNet and math.floor(s.ahNet * n),
         }
-        -- where it sells best (vendor money is certain, AH money is a listing price)
-        local v, a = r.vendor or 0, r.ahTotal
-        if a and a > v then
-            r.where, r.best = "AH", a
-        elseif v > 0 then
-            r.where, r.best = "Vendor", v
-        elseif a then
-            r.where, r.best = "AH", a
-        end
-        if a then r.gain = a - v end
+        r.vendor, r.ahTotal, r.where, r.best, r.gain = Values(vendorEach, s.ahNet, count)
+        r.totVendor, _, r.totWhere, r.totBest = Values(vendorEach, s.ahNet, n)
         rows[#rows + 1] = r
     end
     return rows
