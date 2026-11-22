@@ -9,7 +9,7 @@ Formerly **CraftProfit**. The old `/cp` command still works.
 - **Crafting tab**: every recipe your characters know, with material cost, sale price, profit and margin after the AH cut. You can sort it, filter by profession, show only profitable recipes, and include all your characters.
 - **Disenchant tab**: gear auctions seen on the AH, compared against the expected value of what they disenchant into.
 - **Vendor Flips tab**: AH auctions listed below what a vendor pays for the item. Click a row to open it in the AH buy screen.
-- **Vendor Recipes tab**: recipes sold by NPCs (including limited stock and reputation recipes) compared with their AH price. It shows each vendor's location, such as "Astranaar, Ashenvale" or "Ironforge", with map coordinates. Right-click a row to set a waypoint to that vendor, or Ctrl+right-click for the nearest one you can use. Tick **By zone** to group the list into collapsible zones (Ironforge, Stormwind City, Moonglade...), with each zone's recipe count and total profit. A recipe sold in several zones shows up under each of them. Right-click a zone for a waypoint to the nearest vendor there. Waypoints use TomTom if it's installed, otherwise the game's map pin. Needs the optional recipe data, see below.
+- **Vendor Recipes tab**: recipes sold by NPCs (including limited stock and reputation recipes) compared with their AH price. It shows each vendor's location, such as "Astranaar, Ashenvale" or "Ironforge", with map coordinates. Right-click a row to set a waypoint to that vendor, or Ctrl+right-click for the nearest one you can use. Tick **By zone** to group the list into collapsible zones (Ironforge, Stormwind City, Moonglade...), with each zone's recipe count and total profit. A recipe sold in several zones shows up under each of them. Right-click a zone for a waypoint to the nearest vendor there. Waypoints use TomTom if it's installed, otherwise the game's map pin.
 - **Bags tab**: everything in your bags that isn't soulbound, with what it's worth at a vendor and on the AH, and which one pays more. The **Values** button switches the money columns between one item, one full stack, or everything you have, so you can sort by what's worth most per item. The tooltip shows all three.
 - **Item tooltips**: AH and vendor prices on every item tooltip (`/gl tooltip` to turn off).
 - **Targeted scan**: scans only the items you track, instead of the whole AH. It pauses while you're on the Sell tab or posting.
@@ -35,19 +35,21 @@ Formerly **CraftProfit**. The old `/cp` command still works.
 
 Copy the `GoblinLedger` folder into `World of Warcraft\_forever_\Interface\AddOns\` and restart the game or `/reload`.
 
-Optional dependencies: FojjiCore, FojjiCore_Professions, Auctionator, TomTom.
+No other addons needed. Optional: Auctionator (fallback AH prices) and TomTom (waypoints).
 
-## Vendor recipe data
+## Vendor database
 
-The vendor recipe list, vendor map spots and some vendor sell prices come from **FojjiCore_Professions**. That data belongs to Fojji (and the sources they credit), so it is **not included in this repository**. If you have FojjiCore installed, generate a local copy:
+`Data/VendorDB.lua` is GoblinLedger's own database: 306 recipes sold by NPCs for gold (136 limited stock), with each vendor's zone, town, map spot, faction, price and any reputation needed, plus 1,986 vendor sell prices. It ships with the addon.
+
+It's built from **FojjiCore_Professions** by Fojji, copied with Fojji's permission. Thanks, Fojji! Fojji's own sources are seemeta.com (recipe data datamined from WoW Forever), Wowhead, MetaForge and QuestieDB (vendors and NPC spots), wow-professions.com and warcraft.wiki.gg. Town names come from GoblinLedger's own table of town centres.
+
+Maintainers can refresh it after a FojjiCore update, with FojjiCore_Professions installed next to GoblinLedger:
 
 ```bash
 python tools/sync_fojji.py
 ```
 
-This writes `Data/FojjiData.lua`, which is git-ignored. Add `-v` to list every vendor and the town it was placed in. Town names come from a table of approximate town centres in the script, because Fojji only stores zones. Re-run it after FojjiCore updates.
-
-Without the file, GoblinLedger reads FojjiCore_Professions directly if it's loaded. Otherwise the vendor recipe tab is empty and everything else still works.
+Add `-v` to list every vendor and the town it was placed in.
 
 ## License
 

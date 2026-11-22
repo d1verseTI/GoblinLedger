@@ -678,7 +678,7 @@ function flipDef.footer(p)
 end
 
 ---------------------------------------------------------------------------
--- Vendor Recipes tab: recipes sold by NPCs vs. their AH price (FojjiCore data)
+-- Vendor Recipes tab: recipes sold by NPCs vs. their AH price (Data/VendorDB.lua)
 ---------------------------------------------------------------------------
 local recDef = {
     sortKey = "recSortKey", sortDesc = "recSortDesc",
@@ -721,7 +721,7 @@ function recDef.toolbar(p)
     end)
     p.noData = p:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     p.noData:SetPoint("CENTER", 0, 20)
-    p.noData:SetText("No recipe vendor data - run tools/sync_fojji.py (needs FojjiCore: Professions).")
+    p.noData:SetText("Recipe vendor database missing - reinstall GoblinLedger (Data/VendorDB.lua).")
 end
 
 -- search text in any vendor's name, zone or town
@@ -798,7 +798,7 @@ function recDef.fill(row, d)
     c.t:SetText(Age(d.t))
 end
 
-local SRC_NAME = { cp = "GoblinLedger scan", old = "last seen (none listed now)", auctionator = "Auctionator", fojji = "FojjiCore scan" }
+local SRC_NAME = { cp = "GoblinLedger scan", old = "last seen (none listed now)", auctionator = "Auctionator" }
 
 function recDef.tooltip(row, d)
     if d.header then return recDef.headerTooltip(row, d) end

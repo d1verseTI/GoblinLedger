@@ -5,11 +5,11 @@
 ## Version: 1.1.0
 ## X-Flavor: Forever
 ## SavedVariables: GoblinLedgerDB
-## OptionalDeps: FojjiCore, FojjiCore_Professions, Auctionator
+## OptionalDeps: Auctionator, TomTom
 
 Core.lua
 Disenchant.lua
-Data\FojjiData.lua
+Data\VendorDB.lua
 Flips.lua
 Scanner.lua
 Bags.lua

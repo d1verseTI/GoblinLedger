@@ -1,8 +1,7 @@
 -- GoblinLedger: flips
 --   * Vendor flips: AH auctions listed below what a vendor pays for the item
 --   * Vendor recipes: recipes sold by NPCs (incl. limited stock) vs. their AH price
--- Recipe vendor data: our own copy in Data/FojjiData.lua (tools/sync_fojji.py),
--- falling back to a live FojjiCore_Professions if that file is missing.
+-- Recipe vendor data and extra vendor sell prices: our own database, Data/VendorDB.lua.
 local ADDON, ns = ...
 
 local F = {}
@@ -17,11 +16,6 @@ local function RequestItem(id)
     if C_Item and C_Item.RequestLoadItemDataByID then C_Item.RequestLoadItemDataByID(id) end
 end
 
-local function Fojji()
-    local A = FojjiCoreNS
-    return A, A and A.ProfessionData
-end
-
 ---------------------------------------------------------------------------
 -- Vendor sell price: number > 0, 0 = can't be vendored, nil = not known yet
 ---------------------------------------------------------------------------
@@ -34,16 +28,10 @@ function F.VendorSell(id)
         sellCache[id] = sell
         return sell
     end
-    local own = ns.FojjiData and ns.FojjiData.sell[id]
+    local own = ns.VendorDB and ns.VendorDB.sell[id]
     if own then
         sellCache[id] = own
         return own
-    end
-    local _, D = Fojji()
-    local it = D and D.items and D.items[id]
-    if it and type(it[3]) == "number" then
-        sellCache[id] = it[3]
-        return it[3]
     end
     RequestItem(id)
     return nil
@@ -156,22 +144,21 @@ function F.FlipRows()
 end
 
 ---------------------------------------------------------------------------
--- Vendor-sold recipes (FojjiCore_Professions data)
--- vendor source entry: {"vendor", npcID, npcName, zone, _, priceCopper, side, limited(1), currencyText, _}
+-- Vendor-sold recipes (Data/VendorDB.lua)
 ---------------------------------------------------------------------------
 local recipeList, recipeSet
 
 function F.HasRecipeData()
-    if ns.FojjiData and ns.FojjiData.recipes then return true end
-    local _, D = Fojji()
-    return D ~= nil and D.recipes ~= nil
+    return ns.VendorDB ~= nil and ns.VendorDB.recipes ~= nil
 end
 
--- our synced copy: { recipeItemID, spellName, profession, skill,
+-- VendorDB.recipes: { recipeItemID, spellName, profession, skill,
 --   { {npc, zone, price, side, limited, rep|false, mapID, x, y, town|false}, ... } }
-local function ListFromOwnData(src)
-    local list, set = {}, {}
-    for _, r in ipairs(src) do
+function F.RecipeList()
+    if recipeList then return recipeList end
+    if not F.HasRecipeData() then return nil end
+    recipeList, recipeSet = {}, {}
+    for _, r in ipairs(ns.VendorDB.recipes) do
         local vendors = {}
         for _, v in ipairs(r[5]) do
             vendors[#vendors + 1] = {
@@ -180,52 +167,8 @@ local function ListFromOwnData(src)
             }
         end
         table.sort(vendors, function(a, b) return a.price < b.price end)
-        set[r[1]] = true
-        list[#list + 1] = { item = r[1], spell = r[2], prof = r[3], skill = r[4], vendors = vendors }
-    end
-    return list, set
-end
-
-function F.RecipeList()
-    if recipeList then return recipeList end
-    if ns.FojjiData and ns.FojjiData.recipes then
-        recipeList, recipeSet = ListFromOwnData(ns.FojjiData.recipes)
-        return recipeList
-    end
-    local _, D = Fojji()
-    if not D or not D.recipes then return nil end
-    local profName = {}
-    for _, p in ipairs(D.profs or {}) do profName[p.slug] = p.name end
-    recipeList, recipeSet = {}, {}
-    for slug, list in pairs(D.recipes) do
-        for _, r in ipairs(list) do
-            if r.b and r.src and not recipeSet[r.b] then
-                local vendors = {}
-                for _, s in ipairs(r.src) do
-                    -- gold price only (skip Merchant's Favor and other currencies)
-                    if s[1] == "vendor" and type(s[6]) == "number" and s[6] > 0 and not s[9] then
-                        vendors[#vendors + 1] = {
-                            npc = s[3] or "?", zone = s[4] or "?", price = s[6],
-                            side = s[7] or "both", limited = s[8] == 1, rep = s[10],
-                        }
-                        local npcID = s[2] or (D.npcByName and D.npcByName[s[3]])
-                        local spot = npcID and D.npcSpots and D.npcSpots[npcID]
-                        if spot then
-                            local v = vendors[#vendors]
-                            v.map, v.x, v.y = spot[1], spot[2], spot[3]
-                        end
-                    end
-                end
-                if #vendors > 0 then
-                    table.sort(vendors, function(a, b) return a.price < b.price end)
-                    recipeSet[r.b] = true
-                    recipeList[#recipeList + 1] = {
-                        item = r.b, spell = r.n, prof = profName[slug] or slug,
-                        skill = r.k and r.k[1], vendors = vendors,
-                    }
-                end
-            end
-        end
+        recipeSet[r[1]] = true
+        recipeList[#recipeList + 1] = { item = r[1], spell = r[2], prof = r[3], skill = r[4], vendors = vendors }
     end
     return recipeList
 end
@@ -262,7 +205,7 @@ local function AuctionatorPrice(id)
     return p, t
 end
 
--- AH price for a recipe: our own scan, else Auctionator, else a live FojjiCore
+-- AH price for a recipe: our own scan, else Auctionator
 local function RecipeAH(id)
     local p = ns.db.prices[id]
     local price, old = ns.AHPrice(id)
@@ -270,14 +213,6 @@ local function RecipeAH(id)
     if p and p.t and p.qty == 0 then return nil, "none", 0, p.t end -- we looked, none listed
     local ap, at = AuctionatorPrice(id)
     if ap then return ap, "auctionator", nil, at end
-    local A = FojjiCoreNS
-    local FA = A and A.Auctions
-    if FA and FA.Price then
-        local ok, fp, fn, ft, fsrc = pcall(FA.Price, id)
-        if ok and type(fp) == "number" and fp > 0 then
-            return fp, fsrc or "fojji", fn, ft
-        end
-    end
 end
 
 function F.RecipeRows(myFactionOnly)
