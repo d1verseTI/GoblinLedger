@@ -21,6 +21,8 @@ HERE = pathlib.Path(__file__).resolve().parent
 ADDON = HERE.parent
 FILES = ["Data/VendorDB.lua", "tools/recorded_vendors.json", "tools/fojji_vendors.json"]
 LOG = HERE / "publish_vendordb.log"
+# no console windows popping up when run by Task Scheduler
+NO_WINDOW = {"creationflags": subprocess.CREATE_NO_WINDOW} if sys.platform == "win32" else {}
 
 
 def log(msg):
@@ -35,7 +37,7 @@ def log(msg):
 
 
 def git(repo, *args, check=True):
-    return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, check=check)
+    return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, check=check, **NO_WINDOW)
 
 
 def main():
@@ -46,7 +48,7 @@ def main():
         log(f"ERROR: {repo} is not a git repository")
         return 1
 
-    build = subprocess.run([sys.executable, str(HERE / "build_vendordb.py")], capture_output=True, text=True)
+    build = subprocess.run([sys.executable, str(HERE / "build_vendordb.py")], capture_output=True, text=True, **NO_WINDOW)
     if build.returncode != 0:
         log("ERROR: build failed: " + (build.stderr or build.stdout).strip().splitlines()[-1])
         return 1
