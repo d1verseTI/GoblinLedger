@@ -329,7 +329,13 @@ def main():
     # 1. Fojji's list (cached)
     fojji = extract_fojji()
     if fojji:
-        save_json(FOJJI_JSON, fojji)
+        cached = load_json(FOJJI_JSON, None)
+        same = cached and {k: v for k, v in cached.items() if k != "synced"} == \
+            {k: v for k, v in fojji.items() if k != "synced"}
+        if same:
+            fojji = cached  # same data: keep the file (and its date) as it is
+        else:
+            save_json(FOJJI_JSON, fojji)
         print(f"Fojji's list refreshed from FojjiCore_Professions (build {fojji['build']}).")
     else:
         fojji = load_json(FOJJI_JSON, None)
@@ -430,11 +436,20 @@ def main():
     lines.append("    },")
     lines.append("}")
     OUT.parent.mkdir(exist_ok=True)
-    OUT.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
+    text = "\n".join(lines) + "\n"
+
+    def without_dates(t):  # the build date alone isn't a change
+        return re.sub(r'built( = "|\s)\d{4}-\d\d-\d\d"?', "", t)
+
+    old = OUT.read_text(encoding="utf-8") if OUT.exists() else ""
+    if without_dates(old) == without_dates(text):
+        print(f"{OUT.name} unchanged.")
+    else:
+        OUT.write_text(text, encoding="utf-8", newline="\n")
 
     allv = {(v["npc"], v["zone"], v["src"]): v for e in out_recipes for v in e["vendors"]}.values()
     limited = sum(1 for e in out_recipes if any(v["limited"] for v in e["vendors"]))
-    print(f"Wrote {OUT}")
+    print(f"Built {OUT}")
     print(f"  {len(out_recipes)} vendor recipes ({limited} limited stock), {len(fojji.get('sell', {}))} sell prices")
     print(f"  {len(allv)} vendors: {sum(1 for v in allv if v['src'] == 'ledger')} recorded by GoblinLedger, "
           f"{sum(1 for v in allv if v['src'] == 'fojji')} from Fojji's list")

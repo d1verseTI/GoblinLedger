@@ -63,6 +63,8 @@ This does three things:
 2. Collects the vendors you recorded from your SavedVariables (`WTF\Account\*\SavedVariables\GoblinLedger.lua`) into `tools/recorded_vendors.json`. Newest wins, and only NPC data is kept.
 3. Builds `Data/VendorDB.lua`, where recorded vendors replace Fojji's entries for the same NPC.
 
+To publish automatically, run `python tools/publish_vendordb.py --repo <path to this repo>` on a schedule. It rebuilds the database and, only if it changed, commits and pushes just the database files.
+
 Options: `-v` lists every vendor with its source and town, `--include-shared` also takes vendors other players shared with you, and `--wtf <path>` points at a different WTF folder.
 
 ## License
