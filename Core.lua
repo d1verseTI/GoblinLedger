@@ -36,6 +36,8 @@ local DEFAULTS = {
         recMyFaction = true,
         recLimitedOnly = false,
         recProfitableOnly = false,
+        recGroup = false,     -- Vendor Recipes: group by the zone the vendor is in
+        recOpen = {},         -- [zone] = true for expanded zone groups
         bagSortKey = "best",
         bagSortDesc = true,
         bagView = "each",     -- Bags tab money columns: "each" item, full "stack", or "all" you have

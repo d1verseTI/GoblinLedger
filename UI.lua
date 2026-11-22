@@ -189,7 +189,13 @@ local function BuildPanel(def)
             local row, d = p.rows[i], p.data[i + offset]
             row.data = d
             if d then
-                row.icon:SetTexture(select(10, GetItemInfo(d.item)) or d.icon or 134400)
+                if d.header then
+                    row.icon:SetTexture(d.icon)
+                    row.headerBg:Show()
+                else
+                    row.icon:SetTexture(select(10, GetItemInfo(d.item)) or d.icon or 134400)
+                    row.headerBg:Hide()
+                end
                 def.fill(row, d)
                 row:Show()
             else
@@ -213,6 +219,10 @@ local function BuildPanel(def)
             bg:SetAllPoints()
             bg:SetColorTexture(1, 1, 1, 0.04)
         end
+        row.headerBg = row:CreateTexture(nil, "BACKGROUND", nil, 1)
+        row.headerBg:SetAllPoints()
+        row.headerBg:SetColorTexture(1, 0.8, 0.2, 0.12)
+        row.headerBg:Hide()
         row.icon = row:CreateTexture(nil, "ARTWORK")
         row.icon:SetSize(ROW_H - 2, ROW_H - 2)
         row.icon:SetPoint("LEFT", 2, 0)
@@ -233,6 +243,10 @@ local function BuildPanel(def)
         row:SetScript("OnClick", function(self, button)
             local d = self.data
             if not d then return end
+            if d.header then
+                if def.headerClick then def.headerClick(self, d, button) end
+                return
+            end
             if button == "RightButton" then
                 if def.rightClick then def.rightClick(self, d) end
                 return
@@ -255,6 +269,8 @@ local function BuildPanel(def)
         p.data = def.getData(p)
         local s = ns.db.settings
         SortData(p.data, s[def.sortKey], s[def.sortDesc])
+        p.flat = p.data -- before any grouping (footers count these)
+        if def.postSort then p.data = def.postSort(p, p.data) end
         for _, h in ipairs(p.headers) do
             local arrow = (h.key == s[def.sortKey]) and (s[def.sortDesc] and " v" or " ^") or ""
             h.text:SetText(h.label .. arrow)
@@ -689,19 +705,44 @@ function recDef.toolbar(p)
     p.checks[1] = MakeCheck(p, "My faction", "recMyFaction", p.search, 10)
     p.checks[2] = MakeCheck(p, "Limited only", "recLimitedOnly", p.checks[1].label, 8)
     p.checks[3] = MakeCheck(p, "Profitable only", "recProfitableOnly", p.checks[2].label, 8)
+    p.checks[4] = MakeCheck(p, "By zone", "recGroup", p.checks[3].label, 8)
+    Tip(p.checks[4], "Group the recipes by the zone you buy them in. Click a zone to open or close it, right-click it for a waypoint to the nearest vendor there.")
     local btn = MakeButton(p, "Scan list", 90)
-    btn:SetPoint("LEFT", p.checks[3].label, "RIGHT", 16, 0)
+    btn:SetPoint("LEFT", p.checks[4].label, "RIGHT", 16, 0)
     btn:SetScript("OnClick", function()
-        local ids = {}
-        for _, d in ipairs(p.data) do ids[#ids + 1] = d.item end
+        local ids, seen = {}, {}
+        for _, d in ipairs(p.flat or p.data) do
+            if d.item and not seen[d.item] then seen[d.item] = true; ids[#ids + 1] = d.item end
+        end
         if #ids > 0 then ns.Scanner.StartTargeted(false, ids) end
     end)
     Tip(btn, function()
-        return ("Search the AH for the %d recipes in this list (about 1 per second). A Full Scan prices all of them at once."):format(#p.data)
+        return ("Search the AH for the %d recipes in this list (about 1 per second). A Full Scan prices all of them at once."):format(#(p.flat or p.data))
     end)
     p.noData = p:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     p.noData:SetPoint("CENTER", 0, 20)
     p.noData:SetText("No recipe vendor data - run tools/sync_fojji.py (needs FojjiCore: Professions).")
+end
+
+-- search text in any vendor's name, zone or town
+local function VendorMatches(r, q, mineOnly)
+    for _, v in ipairs(r.recipe.vendors) do
+        if not mineOnly or ns.Flips.CanUse(v) then
+            if v.npc:lower():find(q, 1, true) or tostring(v.zone):lower():find(q, 1, true)
+                or (v.town and v.town:lower():find(q, 1, true)) then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+-- some vendor (one you can use, when "My faction" is on) has it in limited stock
+local function AnyLimited(r, mineOnly)
+    for _, v in ipairs(r.recipe.vendors) do
+        if v.limited and (not mineOnly or ns.Flips.CanUse(v)) then return true end
+    end
+    return false
 end
 
 function recDef.getData(p)
@@ -710,9 +751,8 @@ function recDef.getData(p)
     local q = p.search:GetText():lower()
     local s = ns.db.settings
     for _, r in ipairs(ns.Flips.RecipeRows(s.recMyFaction)) do
-        if (q == "" or tostring(r.name):lower():find(q, 1, true) or tostring(r.npc):lower():find(q, 1, true)
-                or tostring(r.loc):lower():find(q, 1, true))
-            and (not s.recLimitedOnly or r.lim == 1)
+        if (q == "" or tostring(r.name):lower():find(q, 1, true) or VendorMatches(r, q, s.recMyFaction))
+            and (not s.recLimitedOnly or r.lim == 1 or (s.recGroup and AnyLimited(r, s.recMyFaction)))
             and (not s.recProfitableOnly or (r.profit and r.profit > 0)) then
             out[#out + 1] = r
         end
@@ -722,7 +762,18 @@ end
 
 local SIDE_COLOR = { alliance = "|cff4090ff", horde = "|cffff4040", both = "|cffffffff" }
 
+local function FillZoneHeader(row, g)
+    local c = row.cells
+    for _, fs in pairs(c) do fs:SetText("") end
+    c.name:SetText(("%s|cffffd100%s|r |cff909090(%d)|r"):format(g.here and "|cff40ff40>|r " or "", g.zone, g.n))
+    c.npc:SetText(g.prof > 0 and ("|cff40ff40%d profitable|r"):format(g.prof) or "|cff808080none profitable|r")
+    c.loc:SetText(g.towns)
+    if g.lim > 0 then c.lim:SetText(("|cffff9030%d|r"):format(g.lim)) end
+    if g.profit > 0 then c.profit:SetText(Money(g.profit, true)) end
+end
+
 function recDef.fill(row, d)
+    if d.header then return FillZoneHeader(row, d) end
     local c = row.cells
     c.name:SetText(ItemName(d.item, d.name))
     c.prof:SetText(d.prof)
@@ -750,6 +801,7 @@ end
 local SRC_NAME = { cp = "GoblinLedger scan", old = "last seen (none listed now)", auctionator = "Auctionator", fojji = "FojjiCore scan" }
 
 function recDef.tooltip(row, d)
+    if d.header then return recDef.headerTooltip(row, d) end
     GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
     SetItemTip(d.item)
     GameTooltip:AddLine(" ")
@@ -795,14 +847,145 @@ function recDef.rightClick(row, d)
 end
 
 function recDef.footer(p)
+    local list = p.flat or p.data
     local n, lim = 0, 0
-    for _, d in ipairs(p.data) do
+    for _, d in ipairs(list) do
         if d.profit and d.profit > 0 then
             n = n + 1
             if d.lim == 1 then lim = lim + 1 end
         end
     end
-    return ("%d recipes  |  %d profitable (%d limited stock)"):format(#p.data, n, lim)
+    local txt = ("%d recipes  |  %d profitable (%d limited stock)"):format(#list, n, lim)
+    if p.zoneCount then txt = ("%d zones  |  "):format(p.zoneCount) .. txt end
+    return txt
+end
+
+---------------------------------------------------------------------------
+-- Vendor Recipes grouped by zone
+---------------------------------------------------------------------------
+-- the same recipe row, but bought from vendor v
+local function RowForVendor(d, v, cut)
+    local r = {}
+    for k, val in pairs(d) do r[k] = val end
+    r.vendor, r.npc, r.cost, r.loc = v, v.npc, v.price, ns.Flips.Where(v)
+    r.lim = v.limited and 1 or 0
+    r.otherSide = not ns.Flips.CanUse(v)
+    r.profit, r.margin = nil, nil
+    if d.ah then
+        r.profit = math.floor(d.ah * (1 - cut) - v.price)
+        r.margin = r.profit / v.price
+    end
+    return r
+end
+
+function recDef.postSort(p, data)
+    p.zoneCount = nil
+    local s = ns.db.settings
+    if not s.recGroup then return data end
+    local cut = s.ahCut or 0.05
+    local groups, order = {}, {}
+    for _, d in ipairs(data) do
+        -- every zone this recipe is sold in (cheapest vendor there; vendors are sorted by price)
+        local perZone, zones = {}, {}
+        for _, v in ipairs(d.recipe.vendors) do
+            local usable = ns.Flips.CanUse(v)
+            if usable or not s.recMyFaction then
+                local z = v.zone or "?"
+                local cur = perZone[z]
+                if not cur then zones[#zones + 1] = z end
+                -- prefer one your faction can use
+                if not cur or (usable and not ns.Flips.CanUse(cur)) then perZone[z] = v end
+            end
+        end
+        for _, z in ipairs(zones) do
+            local r = (perZone[z] == d.vendor) and d or RowForVendor(d, perZone[z], cut)
+            if (not s.recLimitedOnly or r.lim == 1) and (not s.recProfitableOnly or (r.profit and r.profit > 0)) then
+                local g = groups[z]
+                if not g then
+                    g = { header = true, zone = z, rows = {}, n = 0, prof = 0, lim = 0, profit = 0, townSet = {}, towns = "" }
+                    groups[z] = g
+                    order[#order + 1] = g
+                end
+                g.rows[#g.rows + 1] = r
+                g.n = g.n + 1
+                if r.lim == 1 then g.lim = g.lim + 1 end
+                if r.profit and r.profit > 0 then g.prof, g.profit = g.prof + 1, g.profit + r.profit end
+                local t = r.vendor.town
+                if t and t ~= z and not g.townSet[t] then
+                    g.townSet[t] = true
+                    g.towns = g.towns == "" and t or (g.towns .. ", " .. t)
+                end
+            end
+        end
+    end
+    local here = GetRealZoneText and GetRealZoneText()
+    table.sort(order, function(a, b)
+        if (a.zone == here) ~= (b.zone == here) then return a.zone == here end
+        return a.zone < b.zone
+    end)
+    local openAll = p.search:GetText() ~= "" -- searching: show the matches
+    local out = {}
+    for _, g in ipairs(order) do
+        g.here = g.zone == here
+        g.open = openAll or s.recOpen[g.zone] == true
+        g.icon = g.open and "Interface\\Buttons\\UI-MinusButton-Up" or "Interface\\Buttons\\UI-PlusButton-Up"
+        out[#out + 1] = g
+        if g.open then
+            for _, r in ipairs(g.rows) do out[#out + 1] = r end
+        end
+    end
+    p.zoneCount = #order
+    return out
+end
+
+-- distinct vendors in a zone group
+local function GroupVendors(g)
+    local list, seen = {}, {}
+    for _, r in ipairs(g.rows) do
+        local v = r.vendor
+        if not seen[v] then seen[v] = true; list[#list + 1] = v end
+    end
+    return list
+end
+
+function recDef.headerClick(row, g, button)
+    if button == "RightButton" then
+        local vendors = GroupVendors(g)
+        local near = ns.Flips.Nearest(vendors)
+        if not near then
+            for _, v in ipairs(vendors) do if v.map and ns.Flips.CanUse(v) then near = v break end end
+        end
+        ns.Flips.Waypoint(near or vendors[1], g.zone .. " recipes")
+        return
+    end
+    local open = ns.db.settings.recOpen
+    open[g.zone] = not open[g.zone] or nil
+    UI.Refresh()
+end
+
+function recDef.headerTooltip(row, g)
+    GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
+    GameTooltip:AddLine(g.zone, 1, 0.82, 0)
+    GameTooltip:AddLine(("%d recipes, %d profitable, %d limited stock"):format(g.n, g.prof, g.lim), 1, 1, 1)
+    if g.profit > 0 then
+        GameTooltip:AddDoubleLine("Buy every profitable one", "~" .. Money(g.profit) .. " profit", 1, 0.82, 0, 0.3, 1, 0.3)
+    end
+    GameTooltip:AddLine(" ")
+    GameTooltip:AddLine("Vendors:", 1, 0.82, 0)
+    local count = {}
+    for _, r in ipairs(g.rows) do count[r.vendor] = (count[r.vendor] or 0) + 1 end
+    local vendors = GroupVendors(g)
+    table.sort(vendors, function(a, b) return (count[a] or 0) > (count[b] or 0) end)
+    for i, v in ipairs(vendors) do
+        if i > 12 then GameTooltip:AddLine(("  ...and %d more"):format(#vendors - 12), 0.7, 0.7, 0.7) break end
+        local where = ns.Flips.WhereLong(v)
+        GameTooltip:AddDoubleLine(("  %s - %s"):format(v.npc, where), ("%d"):format(count[v]), 1, 1, 1, 0.7, 0.7, 0.7)
+    end
+    local near, dist = ns.Flips.Nearest(vendors)
+    if near then GameTooltip:AddLine(("Nearest: %s (%d yd)"):format(near.npc, math.floor(dist)), 0.6, 1, 0.6) end
+    GameTooltip:AddLine(" ")
+    GameTooltip:AddLine("Click: open / close   Right-click: waypoint to the nearest vendor here", 0.6, 0.6, 0.6)
+    GameTooltip:Show()
 end
 
 ---------------------------------------------------------------------------

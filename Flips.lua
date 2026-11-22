@@ -244,6 +244,10 @@ local function CanUse(v, faction)
     return v.side == "both" or v.side == faction
 end
 
+function F.CanUse(v)
+    return CanUse(v, MyFaction())
+end
+
 -- Auctionator's last price for an item, and when (its public API)
 local function AuctionatorPrice(id)
     local api = Auctionator and Auctionator.API and Auctionator.API.v1
