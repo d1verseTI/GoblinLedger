@@ -798,6 +798,13 @@ function recDef.fill(row, d)
     c.t:SetText(Age(d.t))
 end
 
+-- where a vendor entry comes from
+local SRC_TAG = {
+    recorded = "  |cff40ff40(seen by you)|r",
+    shared = "  |cff80c0ff(shared by a player)|r",
+    ledger = "  |cff40ff40(verified)|r",
+}
+
 local SRC_NAME = { cp = "GoblinLedger scan", old = "last seen (none listed now)", auctionator = "Auctionator" }
 
 function recDef.tooltip(row, d)
@@ -810,6 +817,7 @@ function recDef.tooltip(row, d)
     for _, v in ipairs(d.recipe.vendors) do
         local left = ("  %s%s|r - %s"):format(SIDE_COLOR[v.side] or "|cffffffff", v.npc, ns.Flips.WhereLong(v))
         if v.limited then left = left .. "  |cffff9030limited|r" end
+        left = left .. (SRC_TAG[v.src] or "")
         GameTooltip:AddDoubleLine(left, Money(v.price), 1, 1, 1, 1, 1, 1)
         if v.rep then GameTooltip:AddLine("      needs " .. v.rep, 0.6, 0.8, 1) end
     end

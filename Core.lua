@@ -13,7 +13,12 @@ local DEFAULTS = {
     chars = {},      -- [char-realm] = { recipes = { [recipeID] = {...} } }
     de = {},         -- gear auctions for the Disenchant tab (see Disenchant.lua)
     lastReplicate = 0,
+    recorded = {},   -- [npcID] = vendor you recorded (Recorder.lua)
+    shared = {},     -- [npcID] = vendor another player's GoblinLedger shared with you (Comm.lua)
     settings = {
+        record = true,        -- record recipes when you open a vendor
+        recordChat = true,    -- say so in chat
+        share = true,         -- share recorded vendors with other GoblinLedger users in your guild / group
         autoScan = false,     -- scan stale tracked items when the AH opens (/cp auto)
         staleMinutes = 30,    -- auto-scan only items older than this
         ahCut = 0.05,         -- AH cut taken from sales
@@ -419,6 +424,20 @@ SlashCmdList.GOBLINLEDGER = function(msg)
     elseif msg:match("^stale %d+") then
         ns.db.settings.staleMinutes = tonumber(msg:match("%d+"))
         ns.Print("Auto-scan refreshes prices older than", ns.db.settings.staleMinutes, "min.")
+    elseif msg == "record" then
+        ns.db.settings.record = not ns.db.settings.record
+        ns.Print("Recording vendors you visit:", ns.db.settings.record and "ON" or "OFF")
+    elseif msg == "share" then
+        ns.db.settings.share = not ns.db.settings.share
+        ns.Print("Sharing vendors with GoblinLedger users in your guild / group:", ns.db.settings.share and "ON" or "OFF")
+        if ns.db.settings.share then ns.Comm.AnnounceAll(true) end
+    elseif msg == "quiet" then
+        ns.db.settings.recordChat = not ns.db.settings.recordChat
+        ns.Print("Chat messages about recorded / shared vendors:", ns.db.settings.recordChat and "ON" or "OFF")
+    elseif msg == "vendors" then
+        local own, shared, recipes = ns.Recorder.Stats()
+        ns.Print(("You recorded %d vendors (%d recipes). %d more were shared with you. Recording %s, sharing %s."):format(
+            own, recipes, shared, ns.db.settings.record and "on" or "off", ns.db.settings.share and "on" or "off"))
     elseif msg == "resetprices" then
         wipe(ns.db.prices)
         ns.Print("All recorded prices cleared.")
@@ -427,6 +446,7 @@ SlashCmdList.GOBLINLEDGER = function(msg)
         ns.Print("/gl - toggle window | /gl bags - what in your bags is worth selling | /gl tooltip - prices on tooltips on/off")
         ns.Print("/gl scan - scan all tracked items | /gl full - full AH scan (15 min cooldown) | /gl stop")
         ns.Print("/gl auto - toggle auto-scan on AH open | /gl stale <min> | /gl resetprices")
+        ns.Print("/gl vendors - recorded vendor stats | /gl record - record vendors on/off | /gl share - share with guild/group on/off | /gl quiet")
         ns.Print("Open each profession window once so its recipes get recorded.")
     else
         ns.UI.Toggle()

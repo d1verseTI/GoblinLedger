@@ -149,26 +149,90 @@ end
 local recipeList, recipeSet
 
 function F.HasRecipeData()
-    return ns.VendorDB ~= nil and ns.VendorDB.recipes ~= nil
+    return (ns.VendorDB ~= nil and ns.VendorDB.recipes ~= nil) or (ns.db ~= nil and next(ns.db.recorded or {}) ~= nil)
 end
 
 -- VendorDB.recipes: { recipeItemID, spellName, profession, skill,
---   { {npc, zone, price, side, limited, rep|false, mapID, x, y, town|false}, ... } }
+--   { {npc, zone, price, side, limited, rep|false, mapID|false, x|false, y|false, town|false,
+--      npcID|false, src, t}, ... } }      src: "fojji" (Fojji's list) or "ledger" (recorded in game)
+-- On top of that come live recordings: your own (Recorder.lua) and ones shared by other players
+-- (Comm.lua). A live record replaces everything the database has for that vendor when it is newer.
+local function VendorKey(v) return v.npcID or ("name:" .. tostring(v.npc)) end
+
+local function SpellFromItemName(name)
+    if not name then return nil end
+    return (name:gsub("^[%a ]+: ", ""))
+end
+
+function F.InvalidateRecipes()
+    recipeList, recipeSet = nil, nil
+    ns.RequestRefresh()
+end
+
 function F.RecipeList()
     if recipeList then return recipeList end
-    if not F.HasRecipeData() then return nil end
-    recipeList, recipeSet = {}, {}
-    for _, r in ipairs(ns.VendorDB.recipes) do
-        local vendors = {}
+    local db = ns.VendorDB and ns.VendorDB.recipes or {}
+    local byItem, order = {}, {}
+    local shippedT = {} -- vendor key -> newest database time
+    for _, r in ipairs(db) do
+        local e = { item = r[1], spell = r[2], prof = r[3], skill = r[4], vendors = {} }
         for _, v in ipairs(r[5]) do
-            vendors[#vendors + 1] = {
+            local vend = {
                 npc = v[1], zone = v[2], price = v[3], side = v[4] or "both", limited = v[5] == true,
-                rep = v[6] or nil, map = v[7], x = v[8], y = v[9], town = v[10] or nil,
+                rep = v[6] or nil, map = v[7] or nil, x = v[8] or nil, y = v[9] or nil, town = v[10] or nil,
+                npcID = v[11] or nil, src = v[12] or "fojji", t = v[13] or 0,
             }
+            e.vendors[#e.vendors + 1] = vend
+            local k = VendorKey(vend)
+            if vend.t > (shippedT[k] or -1) then shippedT[k] = vend.t end
         end
-        table.sort(vendors, function(a, b) return a.price < b.price end)
-        recipeSet[r[1]] = true
-        recipeList[#recipeList + 1] = { item = r[1], spell = r[2], prof = r[3], skill = r[4], vendors = vendors }
+        byItem[e.item] = e
+        order[#order + 1] = e
+    end
+    -- live records that are newer than the database replace that vendor
+    local live = ns.Recorder and ns.db and ns.Recorder.All() or {}
+    local override = {}
+    for npcID, l in pairs(live) do
+        local t = l.rec.t or 0
+        if t > (shippedT[npcID] or -1) and t > (shippedT["name:" .. tostring(l.rec.name)] or -1) then
+            override[npcID] = l
+        end
+    end
+    if next(override) then
+        local byName = {}
+        for npcID, l in pairs(override) do byName[l.rec.name] = true end
+        for _, e in ipairs(order) do
+            local keep = {}
+            for _, v in ipairs(e.vendors) do
+                local gone = (v.npcID and override[v.npcID]) or (not v.npcID and byName[v.npc])
+                if not gone then keep[#keep + 1] = v end
+            end
+            e.vendors = keep
+        end
+        for npcID, l in pairs(override) do
+            local rec = l.rec
+            for id, it in pairs(rec.items) do
+                local e = byItem[id]
+                if not e then
+                    e = { item = id, spell = SpellFromItemName(it.name) or ("item:" .. id), prof = it.prof or "?", vendors = {} }
+                    byItem[id] = e
+                    order[#order + 1] = e
+                end
+                e.vendors[#e.vendors + 1] = {
+                    npc = rec.name, zone = rec.zone or "?", price = it.price, side = rec.side or "both",
+                    limited = it.limited == true, rep = it.rep, map = rec.map, x = rec.x, y = rec.y,
+                    town = rec.sub, npcID = npcID, src = l.src, t = rec.t,
+                }
+            end
+        end
+    end
+    recipeList, recipeSet = {}, {}
+    for _, e in ipairs(order) do
+        if #e.vendors > 0 then
+            table.sort(e.vendors, function(a, b) return a.price < b.price end)
+            recipeSet[e.item] = true
+            recipeList[#recipeList + 1] = e
+        end
     end
     return recipeList
 end

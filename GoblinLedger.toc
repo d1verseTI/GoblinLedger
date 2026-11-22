@@ -10,7 +10,9 @@
 Core.lua
 Disenchant.lua
 Data\VendorDB.lua
+Recorder.lua
 Flips.lua
+Comm.lua
 Scanner.lua
 Bags.lua
 UI.lua
