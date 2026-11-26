@@ -13,6 +13,7 @@ local DEFAULTS = {
     chars = {},      -- [char-realm] = { recipes = { [recipeID] = {...} } }
     de = {},         -- gear auctions for the Disenchant tab (see Disenchant.lua)
     lastReplicate = 0,
+    fishing = { zones = {}, spots = {} }, -- what you fished up, where (Fishing.lua)
     recorded = {},   -- [npcID] = vendor you recorded (Recorder.lua)
     shared = {},     -- [npcID] = vendor another player's GoblinLedger shared with you (Comm.lua)
     settings = {
@@ -46,7 +47,12 @@ local DEFAULTS = {
         bagSortKey = "best",
         bagSortDesc = true,
         bagView = "each",     -- Bags tab money columns: "each" item, full "stack", or "all" you have
-        bagAHOnly = false,    -- Bags tab: only items worth more on the AH than at a vendor
+        bagAHOnly = false,
+        fishSortKey = "ahNet",
+        fishSortDesc = true,
+        fishGroup = false,    -- Fishing tab: group by zone
+        fishMySkill = false,  -- Fishing tab: hide fish / zones above your skill
+        fishOpen = {},        -- [zone] = true for expanded zone groups    -- Bags tab: only items worth more on the AH than at a vendor
         tooltip = true,       -- AH / vendor prices on item tooltips (/gl tooltip)
     },
 }
@@ -424,6 +430,8 @@ SlashCmdList.GOBLINLEDGER = function(msg)
     elseif msg:match("^stale %d+") then
         ns.db.settings.staleMinutes = tonumber(msg:match("%d+"))
         ns.Print("Auto-scan refreshes prices older than", ns.db.settings.staleMinutes, "min.")
+    elseif msg == "fish" or msg == "fishing" then
+        ns.UI.ShowTab("fish")
     elseif msg == "record" then
         ns.db.settings.record = not ns.db.settings.record
         ns.Print("Recording vendors you visit:", ns.db.settings.record and "ON" or "OFF")
@@ -446,6 +454,7 @@ SlashCmdList.GOBLINLEDGER = function(msg)
         ns.Print("/gl - toggle window | /gl bags - what in your bags is worth selling | /gl tooltip - prices on tooltips on/off")
         ns.Print("/gl scan - scan all tracked items | /gl full - full AH scan (15 min cooldown) | /gl stop")
         ns.Print("/gl auto - toggle auto-scan on AH open | /gl stale <min> | /gl resetprices")
+        ns.Print("/gl fish - fishing: what fish are worth and where to catch them")
         ns.Print("/gl vendors - recorded vendor stats | /gl record - record vendors on/off | /gl share - share with guild/group on/off | /gl quiet")
         ns.Print("Open each profession window once so its recipes get recorded.")
     else

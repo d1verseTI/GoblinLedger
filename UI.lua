@@ -1,4 +1,4 @@
--- GoblinLedger: window with tabs (Crafting, Disenchant, Vendor Flips, Vendor Recipes, Bags)
+-- GoblinLedger: window with tabs (Crafting, Disenchant, Vendor Flips, Vendor Recipes, Bags, Fishing)
 local ADDON, ns = ...
 
 local UI = {}
@@ -1173,6 +1173,249 @@ function bagDef.footer(p)
 end
 
 ---------------------------------------------------------------------------
+-- Fishing tab: every fish, what it's worth and where to catch it
+---------------------------------------------------------------------------
+local fishDef = {
+    sortKey = "fishSortKey", sortDesc = "fishSortDesc",
+    cols = {
+        { key = "name",   label = "Fish",        w = 190, align = "LEFT" },
+        { key = "water",  label = "Water",       w = 60,  align = "LEFT", tip = "Inland (rivers, lakes), coast (sea), or schools / pools you fish in." },
+        { key = "skill",  label = "Skill",       w = 40,  align = "RIGHT", tip = "About the fishing skill you need (approx.). Red: above yours." },
+        { key = "where",  label = "Where",       w = 230, align = "LEFT", tip = "Zones it lives in. Zones where you caught it come first." },
+        { key = "ah",     label = "AH Buyout",   w = 75,  align = "RIGHT" },
+        { key = "ahNet",  label = "AH net",      w = 75,  align = "RIGHT", tip = "Cheapest buyout after the AH cut, each." },
+        { key = "stack",  label = "Stack worth", w = 80,  align = "RIGHT", tip = "A full stack at the better of AH (after cut) and vendor." },
+        { key = "vendor", label = "Vendor",      w = 65,  align = "RIGHT" },
+        { key = "caught", label = "Caught",      w = 50,  align = "RIGHT", tip = "How many you have fished up (recorded since you got GoblinLedger)." },
+        { key = "t",      label = "Age",         w = 40,  align = "RIGHT" },
+    },
+}
+
+function fishDef.toolbar(p)
+    p.search = MakeSearch(p, p, 0)
+    p.search:ClearAllPoints()
+    p.search:SetPoint("TOPLEFT", 20, -3)
+    p.checks = {}
+    p.checks[1] = MakeCheck(p, "By zone", "fishGroup", p.search, 10)
+    Tip(p.checks[1], "Group the fish by zone, with what a catch is worth there (from what you fished up). Click a zone to open or close it, right-click it for a waypoint to your best spot there.")
+    p.checks[2] = MakeCheck(p, "My skill", "fishMySkill", p.checks[1].label, 8)
+    Tip(p.checks[2], "Hide fish and zones that need more fishing skill than you have.")
+    local btn = MakeButton(p, "Scan fish", 90)
+    btn:SetPoint("LEFT", p.checks[2].label, "RIGHT", 16, 0)
+    btn:SetScript("OnClick", function() ns.Scanner.StartTargeted(false, ns.Fishing.FishIDs()) end)
+    btn:SetMotionScriptsWhileDisabled(true)
+    Tip(btn, function()
+        if not ns.Scanner.open then return "Open the Auction House first." end
+        return "Search the AH for every fish in this list (about 1 per second)."
+    end)
+    p.skillText = p:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    p.skillText:SetPoint("LEFT", btn, "RIGHT", 12, 0)
+end
+
+function fishDef.getData(p)
+    local out = {}
+    local q = p.search:GetText():lower()
+    local s = ns.db.settings
+    local rows, skill = ns.Fishing.Rows()
+    p.mySkill = skill
+    for _, r in ipairs(rows) do
+        if (q == "" or tostring(r.name):lower():find(q, 1, true) or r.where:lower():find(q, 1, true))
+            and not (s.fishMySkill and r.tooHigh) then
+            out[#out + 1] = r
+        end
+    end
+    return out
+end
+
+function fishDef.onRefresh(p)
+    p.skillText:SetText(p.mySkill and ("Your fishing skill: %d"):format(p.mySkill) or "Fishing skill unknown")
+end
+
+local WATER_TEXT = { inland = "inland", coast = "coast", school = "schools", both = "coast+sch." }
+
+local function FillFishHeader(row, g)
+    local c = row.cells
+    for _, fs in pairs(c) do fs:SetText("") end
+    c.name:SetText(("%s|cffffd100%s|r |cff909090(%d)|r"):format(g.here and "|cff40ff40>|r " or "", g.zone, g.n))
+    local zs = g.skill
+    if zs then c.skill:SetText((g.mySkill and g.mySkill < zs) and ("|cffff6060%d|r"):format(zs) or tostring(zs)) end
+    if g.stats then
+        c.where:SetText(("You: %d catches, |r%s per catch"):format(g.stats.n, Money(g.stats.perCatch, true)))
+        c.caught:SetText(tostring(g.stats.n))
+    else
+        c.where:SetText("|cff808080no catches recorded here yet|r")
+    end
+end
+
+function fishDef.fill(row, d)
+    if d.header then return FillFishHeader(row, d) end
+    local c = row.cells
+    c.name:SetText(ItemName(d.item, d.name))
+    c.water:SetText((WATER_TEXT[d.water] or d.water) .. (d.note and " |cffffd060*|r" or ""))
+    if d.skill then
+        c.skill:SetText(d.tooHigh and ("|cffff6060%d|r"):format(d.skill) or tostring(d.skill))
+    else
+        c.skill:SetText("|cff808080?|r")
+    end
+    if d.groupZone then
+        local n = d.caughtIn[d.groupZone]
+        c.where:SetText(n and ("|cff40ff40caught %d here|r"):format(n) or "|cff808080not caught here yet|r")
+    else
+        c.where:SetText(d.where ~= "" and d.where or "|cff808080?|r")
+    end
+    if d.ah then
+        c.ah:SetText(d.ahOld and Grey("(" .. Money(d.ah, true) .. ")") or Money(d.ah, true))
+        c.ahNet:SetText(d.ahOld and Grey(Money(d.ahNet, true)) or Money(d.ahNet, true))
+    elseif d.qtyAH == 0 then
+        c.ah:SetText("|cff40ff40none|r")
+        c.ahNet:SetText("|cff808080--|r")
+    else
+        c.ah:SetText("|cff808080--|r")
+        c.ahNet:SetText("|cff808080--|r")
+    end
+    c.stack:SetText(d.stack and Money(d.stack, true) or "|cff808080--|r")
+    c.vendor:SetText((d.vendor and d.vendor > 0) and Money(d.vendor, true) or "|cff808080--|r")
+    c.caught:SetText(d.caught and tostring(d.caught) or "|cff808080-|r")
+    c.t:SetText(Age(d.t))
+end
+
+function fishDef.tooltip(row, d)
+    if d.header then return fishDef.headerTooltip(row, d) end
+    GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
+    SetItemTip(d.item)
+    GameTooltip:AddLine(" ")
+    GameTooltip:AddLine(("|cffffcc33GoblinLedger|r - Fishing (%s%s)"):format(WATER_TEXT[d.water] or d.water,
+        d.skill and (", skill ~" .. d.skill) or ""))
+    if d.note then GameTooltip:AddLine(d.note, 1, 0.82, 0.4) end
+    if d.stack then
+        GameTooltip:AddDoubleLine(("Worth (each / stack of %d)"):format(d.stackMax),
+            Money(d.worth) .. " / " .. Money(d.stack), 1, 0.82, 0, 1, 1, 1)
+    else
+        GameTooltip:AddLine("No AH or vendor price yet - Scan fish at the AH.", 1, 0.5, 0.5)
+    end
+    if #d.zones > 0 then
+        GameTooltip:AddLine("Where:", 1, 0.82, 0)
+        for i, z in ipairs(d.zones) do
+            if i > 14 then GameTooltip:AddLine(("  ...and %d more"):format(#d.zones - 14), 0.7, 0.7, 0.7) break end
+            local zs = ns.Fishing.ZoneSkill(z)
+            local right = d.caughtIn[z] and ("|cff40ff40you caught %d|r"):format(d.caughtIn[z]) or ""
+            GameTooltip:AddDoubleLine("  " .. z .. (zs and (" |cff909090(" .. zs .. ")|r") or ""), right, 1, 1, 1, 1, 1, 1)
+        end
+    end
+    if not d.inDB then GameTooltip:AddLine("Not in the fishing guide - known from your own catches.", 0.6, 0.8, 1) end
+    local spot = ns.Fishing.BestSpot(d.item, d.groupZone)
+    if spot then
+        GameTooltip:AddLine(("Your best spot: %s%s (%d, %d) - %d caught"):format(spot.sub and (spot.sub .. ", ") or "",
+            spot.zone, spot.x, spot.y, spot.n), 0.6, 1, 0.6)
+    end
+    GameTooltip:AddLine(" ")
+    GameTooltip:AddLine("Click: rescan (AH open)   Right-click: waypoint to your best spot   Shift-click: link", 0.6, 0.6, 0.6)
+    GameTooltip:Show()
+end
+
+function fishDef.click(row, d)
+    ns.Scanner.StartTargeted(false, { d.item })
+end
+
+function fishDef.rightClick(row, d)
+    ns.Fishing.Waypoint(ns.Fishing.BestSpot(d.item, d.groupZone), d.name)
+end
+
+-- group by zone: a fish shows under every zone it lives in (or you caught it in)
+function fishDef.postSort(p, data)
+    p.zoneCount = nil
+    local s = ns.db.settings
+    if not s.fishGroup then return data end
+    local skill = p.mySkill
+    local groups, order = {}, {}
+    for _, d in ipairs(data) do
+        for _, z in ipairs(d.zones) do
+            local zs = ns.Fishing.ZoneSkill(z)
+            if not (s.fishMySkill and skill and zs and zs > skill) then
+                local g = groups[z]
+                if not g then
+                    g = { header = true, zone = z, rows = {}, n = 0, skill = zs, mySkill = skill, stats = ns.Fishing.ZoneStats(z) }
+                    groups[z] = g
+                    order[#order + 1] = g
+                end
+                local r = {}
+                for k, v in pairs(d) do r[k] = v end
+                r.groupZone = z
+                g.rows[#g.rows + 1] = r
+                g.n = g.n + 1
+            end
+        end
+    end
+    local here = GetRealZoneText and GetRealZoneText()
+    table.sort(order, function(a, b)
+        if (a.zone == here) ~= (b.zone == here) then return a.zone == here end
+        local va, vb = a.stats and a.stats.perCatch or -1, b.stats and b.stats.perCatch or -1
+        if va ~= vb then return va > vb end
+        return a.zone < b.zone
+    end)
+    local openAll = p.search:GetText() ~= ""
+    local out = {}
+    for _, g in ipairs(order) do
+        g.here = g.zone == here
+        g.open = openAll or s.fishOpen[g.zone] == true
+        g.icon = g.open and "Interface\\Buttons\\UI-MinusButton-Up" or "Interface\\Buttons\\UI-PlusButton-Up"
+        out[#out + 1] = g
+        if g.open then for _, r in ipairs(g.rows) do out[#out + 1] = r end end
+    end
+    p.zoneCount = #order
+    return out
+end
+
+function fishDef.headerClick(row, g, button)
+    if button == "RightButton" then
+        ns.Fishing.Waypoint(ns.Fishing.ZoneSpot(g.zone), "Fishing in " .. g.zone)
+        return
+    end
+    local open = ns.db.settings.fishOpen
+    open[g.zone] = not open[g.zone] or nil
+    UI.Refresh()
+end
+
+function fishDef.headerTooltip(row, g)
+    GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
+    GameTooltip:AddLine(g.zone, 1, 0.82, 0)
+    if g.skill then GameTooltip:AddLine(("Fishing skill needed: ~%d%s"):format(g.skill,
+        g.mySkill and (" (you have " .. g.mySkill .. ")") or ""), 1, 1, 1) end
+    local st = g.stats
+    if st then
+        GameTooltip:AddDoubleLine("Your catches here", tostring(st.n), 1, 0.82, 0, 1, 1, 1)
+        GameTooltip:AddDoubleLine("Worth per catch (average)", Money(st.perCatch), 1, 0.82, 0, 0.3, 1, 0.3)
+        -- what the money comes from
+        local parts = {}
+        for id, amount in pairs(st.items) do
+            parts[#parts + 1] = { id = id, amount = amount, value = ns.Fishing.Worth(id) * amount }
+        end
+        table.sort(parts, function(a, b) return a.value > b.value end)
+        GameTooltip:AddLine("What you fished up here:", 1, 0.82, 0)
+        for i, pt in ipairs(parts) do
+            if i > 10 then GameTooltip:AddLine(("  ...and %d more"):format(#parts - 10), 0.7, 0.7, 0.7) break end
+            GameTooltip:AddDoubleLine(("  %dx %s"):format(pt.amount, ItemName(pt.id)), Money(pt.value, true), 1, 1, 1, 1, 1, 1)
+        end
+        local spot = ns.Fishing.ZoneSpot(g.zone)
+        if spot then GameTooltip:AddLine(("Your most used spot: %s(%d, %d)"):format(spot.sub and (spot.sub .. " ") or "", spot.x, spot.y), 0.6, 1, 0.6) end
+    else
+        GameTooltip:AddLine("No catches recorded here yet. Fish here and GoblinLedger learns what it's worth.", 0.7, 0.7, 0.7, true)
+    end
+    GameTooltip:AddLine(" ")
+    GameTooltip:AddLine("Click: open / close   Right-click: waypoint to your most used spot", 0.6, 0.6, 0.6)
+    GameTooltip:Show()
+end
+
+function fishDef.footer(p)
+    local list = p.flat or p.data
+    local catches, zones = 0, 0
+    for _, z in pairs(ns.db.fishing and ns.db.fishing.zones or {}) do catches, zones = catches + z.n, zones + 1 end
+    local txt = ("%d fish  |  you recorded %d catches in %d zones"):format(#list, catches, zones)
+    if p.zoneCount then txt = ("%d zones  |  "):format(p.zoneCount) .. txt end
+    return txt
+end
+
+---------------------------------------------------------------------------
 -- window
 ---------------------------------------------------------------------------
 local function SelectTab(name)
@@ -1219,7 +1462,7 @@ local function Build()
     f = CreateFrame("Frame", "GoblinLedgerFrame", UIParent, "BasicFrameTemplateWithInset")
     -- wide enough for the widest tab
     local widest = 0
-    for _, def in ipairs({ craftDef, deDef, flipDef, recDef, bagDef }) do
+    for _, def in ipairs({ craftDef, deDef, flipDef, recDef, bagDef, fishDef }) do
         local w = 0
         for _, c in ipairs(def.cols) do w = w + c.w + 4 end
         if w > widest then widest = w end
@@ -1257,6 +1500,9 @@ local function Build()
     tabs.bags = MakeButton(f, "Bags", 80)
     tabs.bags:SetPoint("LEFT", tabs.rec, "RIGHT", 4, 0)
     tabs.bags:SetScript("OnClick", function() SelectTab("bags") end)
+    tabs.fish = MakeButton(f, "Fishing", 80)
+    tabs.fish:SetPoint("LEFT", tabs.bags, "RIGHT", 4, 0)
+    tabs.fish:SetScript("OnClick", function() SelectTab("fish") end)
 
     -- scan controls (shared)
     stopBtn = MakeButton(f, "Stop", 50)
@@ -1284,6 +1530,7 @@ local function Build()
     panels.flip = BuildPanel(flipDef)
     panels.rec = BuildPanel(recDef)
     panels.bags = BuildPanel(bagDef)
+    panels.fish = BuildPanel(fishDef)
 
     -- bottom: progress bar + status
     progress = CreateFrame("StatusBar", nil, f)

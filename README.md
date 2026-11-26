@@ -11,6 +11,7 @@ Formerly **CraftProfit**. The old `/cp` command still works.
 - **Vendor Flips tab**: AH auctions listed below what a vendor pays for the item. Click a row to open it in the AH buy screen.
 - **Vendor Recipes tab**: recipes sold by NPCs (including limited stock and reputation recipes) compared with their AH price. It shows each vendor's location, such as "Astranaar, Ashenvale" or "Ironforge", with map coordinates. Right-click a row to set a waypoint to that vendor, or Ctrl+right-click for the nearest one you can use. Tick **By zone** to group the list into collapsible zones (Ironforge, Stormwind City, Moonglade...), with each zone's recipe count and total profit. A recipe sold in several zones shows up under each of them. Right-click a zone for a waypoint to the nearest vendor there. Waypoints use TomTom if it's installed, otherwise the game's map pin.
 - **Bags tab**: everything in your bags that isn't soulbound, with what it's worth at a vendor and on the AH, and which one pays more. The **Values** button switches the money columns between one item, one full stack, or everything you have, so you can sort by what's worth most per item. The tooltip shows all three.
+- **Fishing tab**: every fish you can catch, what it's worth on the AH and at a vendor (each and per stack), what water and roughly what skill it needs, and which zones it lives in. GoblinLedger records everything you fish up (item, zone, subzone and spot), so zones where you caught a fish come first. Tick **By zone** to see each zone with what a catch there is worth on average, from your own catches. Right-click a fish or zone for a waypoint to your best fishing spot. **Scan fish** prices them all at the AH. The starting fish list (`Data/FishDB.lua`) is GoblinLedger's own guide from general classic fishing knowledge. Your recorded catches correct it over time.
 - **Vendor recorder**: every time you open a vendor, the recipes it sells are recorded: base price (without your reputation discount), limited stock, reputation needed, and the vendor's spot, zone and subzone. What you recorded replaces the database entry for that vendor and shows as "seen by you" in the tooltip. Nothing about your character is stored.
 - **Sharing in game**: GoblinLedger users in the same guild or group swap recorded vendors automatically, using addon messages. Only newer data is taken, and shared vendors show as "shared by a player".
 - **Item tooltips**: AH and vendor prices on every item tooltip (`/gl tooltip` to turn off).
@@ -29,6 +30,7 @@ Formerly **CraftProfit**. The old `/cp` command still works.
 | `/gl auto` | Toggle auto-scanning when the AH opens (off by default) |
 | `/gl stale <min>` | Auto-scan only refreshes prices older than this |
 | `/gl resetprices` | Clear all recorded prices |
+| `/gl fish` | Open the Fishing tab |
 | `/gl vendors` | How many vendors you recorded and got from other players |
 | `/gl record` | Record vendors you visit on/off (on by default) |
 | `/gl share` | Share recorded vendors with your guild / group on/off (on by default) |

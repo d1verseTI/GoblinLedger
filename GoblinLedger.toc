@@ -10,10 +10,12 @@
 Core.lua
 Disenchant.lua
 Data\VendorDB.lua
+Data\FishDB.lua
 Recorder.lua
 Flips.lua
 Comm.lua
 Scanner.lua
 Bags.lua
+Fishing.lua
 UI.lua
 Tooltip.lua
