@@ -2,10 +2,10 @@
 -- Vendors marked "ledger" were recorded in game by GoblinLedger (our own data).
 -- Vendors marked "fojji" come from FojjiCore_Professions by Fojji, copied with permission. Fojji credits:
 -- seemeta.com (recipes), Wowhead, MetaForge and QuestieDB (vendors, NPC spots), wow-professions.com, warcraft.wiki.gg.
--- Fojji data build 1.60.1.70532; built 2026-11-27: 60 recorded vendor entries, 560 from Fojji's list.
+-- Fojji data build 1.60.1.70532; built 2026-11-28: 60 recorded vendor entries, 560 from Fojji's list.
 local _, ns = ...
 ns.VendorDB = {
-    built = "2026-11-27",
+    built = "2026-11-28",
     -- { recipeItemID, spellName, profession, skill,
     --   { {npc, zone, price, side, limited, rep, mapID, x, y, town, npcID, src, t}, ... } }   (false = unknown)
     recipes = {
@@ -160,7 +160,7 @@ ns.VendorDB = {
         { 16217, "Enchant Shield - Greater Stamina", "Enchanting", 265, { {"Daniel Bartlett", "Undercity", 12000, "horde", true, false, 1458, 64, 37.4, false, 4561, "fojji", 0}, {"Mythrin'dir", "Darnassus", 12000, "alliance", true, false, 1457, 61, 17.7, false, 4229, "fojji", 0} } },
         { 16221, "Enchant Chest - Major Stamina", "Enchanting", 275, { {"Qia", "Winterspring", 16000, "both", true, false, 1452, 61.2, 37.2, "Everlook", 11189, "fojji", 0} } },
         { 20755, "Wizard Oil", "Enchanting", 275, { {"Kania", "Silithus", 20000, "both", false, false, 1451, 52, 39.7, "Cenarion Hold", 15419, "fojji", 0} } },
-        { 16243, "Runed Arcanite Rod", "Enchanting", 290, { {"Lorelae Wintersong", "Moonglade", 22000, "both", false, false, 1450, 48.2, 40.2, "Nighthaven", 12022, "ledger", 1795731179} } },
+        { 16243, "Runed Arcanite Rod", "Enchanting", 290, { {"Lorelae Wintersong", "Moonglade", 22000, "both", false, false, 1450, 48.2, 40.2, "Nighthaven", 12022, "ledger", 1795831553} } },
         { 19444, "Enchant Weapon - Strength", "Enchanting", 290, { {"Lokhtos Darkbargainer", "Blackrock Depths", 30000, "both", true, false, false, false, false, false, false, "fojji", 0} } },
         { 19445, "Enchant Weapon - Agility", "Enchanting", 290, { {"Meilosh", "Felwood", 30000, "both", false, false, 1448, 65.7, 2.8, "Timbermaw Hold", 11557, "fojji", 0} } },
         { 19446, "Enchant Bracer - Mana Regeneration", "Enchanting", 290, { {"Argent Quartermaster Hasana", "Tirisfal Glades", 30000, "both", false, false, 1420, 83.3, 68.1, "The Bulwark", 10856, "fojji", 0}, {"Argent Quartermaster Lightspark", "Western Plaguelands", 30000, "both", false, false, 1422, 42.8, 83.7, "Chillwind Camp", 10857, "fojji", 0}, {"Quartermaster Miranda Breechlock", "Eastern Plaguelands", 30000, "both", false, false, 1423, 71.8, 50.2, "Light's Hope Chapel", 11536, "fojji", 0} } },
@@ -304,7 +304,7 @@ ns.VendorDB = {
         { 21358, "Soul Pouch", "Tailoring", 215, { {"Vizzklick", "Tanaris", 12000, "both", false, false, 1446, 51, 27.4, "Gadgetzan", 6568, "fojji", 0} } },
         { 14472, "Runecloth Cloak", "Tailoring", 220, { {"Darnall", "Moonglade", 12000, "both", true, false, 1450, 51.5, 33.3, "Nighthaven", 7940, "fojji", 0} } },
         { 14481, "Runecloth Gloves", "Tailoring", 230, { {"Qia", "Winterspring", 16000, "both", true, false, 1452, 61.2, 37.2, "Everlook", 11189, "fojji", 0} } },
-        { 14483, "Felcloth Pants", "Tailoring", 230, { {"Lorelae Wintersong", "Moonglade", 16000, "both", false, false, 1450, 48.2, 40.2, "Nighthaven", 12022, "ledger", 1795731179} } },
+        { 14483, "Felcloth Pants", "Tailoring", 230, { {"Lorelae Wintersong", "Moonglade", 16000, "both", false, false, 1450, 48.2, 40.2, "Nighthaven", 12022, "ledger", 1795831553} } },
         { 14526, "Mooncloth", "Tailoring", 230, { {"Evie Whirlbrew", "Winterspring", 20000, "both", false, false, 1452, 60.8, 37.8, "Everlook", 11188, "fojji", 0}, {"Qia", "Winterspring", 20000, "both", false, false, 1452, 61.2, 37.2, "Everlook", 11189, "fojji", 0} } },
         { 22308, "Enchanted Runecloth Bag", "Tailoring", 230, { {"Kania", "Silithus", 20000, "both", false, false, 1451, 52, 39.7, "Cenarion Hold", 15419, "fojji", 0} } },
         { 22310, "Cenarion Herb Bag", "Tailoring", 230, { {"Mishta", "Silithus", 20000, "both", false, false, 1451, 49.9, 36.3, "Cenarion Hold", 15179, "fojji", 0} } },
